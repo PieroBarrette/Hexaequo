@@ -1,0 +1,299 @@
+/* Global styles */
+body {
+    background-color: #333;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+    margin: 0;
+    font-family: Arial, sans-serif;
+}
+
+/* Game layout */
+#game-container {
+    background-color: #555;
+    padding: 20px;
+    border-radius: 10px;
+}
+
+#board {
+    display: grid;
+    grid-template-columns: repeat(10, 50px);
+    grid-gap: 2px;
+}
+
+/* Hexagon tiles */
+.hex {
+    width: 50px;
+    height: 57.735px;
+    background-color: #888;
+    clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    position: relative;
+    font-size: 12px;
+}
+
+.hex::after {
+    content: attr(data-notation);
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    color: #FFD700;
+    text-shadow: -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 1px 1px 0 #000;
+    z-index: 10;
+    pointer-events: none;
+}
+
+.hex.even-row {
+    transform: translateX(25px);
+}
+
+/* Game pieces */
+.piece, .tile {
+    position: absolute;
+}
+
+.piece {
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    border: 3px solid #7f7474;
+    z-index: 2;
+}
+
+.piece.white { background-color: rgb(255, 255, 255); }
+.piece.black { background-color: rgb(0, 0, 0); }
+
+.piece.ring {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    border: 3px solid #7f7474; /* Outer border */
+    position: relative;
+    box-sizing: border-box; /* Ensure padding and border are included in the element's total width and height */
+}
+
+.piece.ring.white {
+    background-color: rgb(255, 255, 255); 
+    mask-image: radial-gradient(circle at center, transparent 0, transparent 10px, #fff 10px);
+}
+
+.piece.ring.black {
+    background-color: rgb(0, 0, 0);
+    mask-image: radial-gradient(circle at center, transparent 0, transparent 10px, #000 10px);
+}
+
+.piece.ring::after {
+    content: ''; /* Ensure the pseudo-element is rendered */
+    width: 24px; /* Adjusted to create an inner border */
+    height: 24px; /* Adjusted to create an inner border */
+    border-radius: 50%;
+    border: 3px solid #7f7474; /* Inner border for the ring */
+    position: absolute; /* Position it relative to the parent */
+    top: 50%; /* Center it vertically */
+    left: 50%; /* Center it horizontally */
+    transform: translate(-50%, -50%); /* Center the pseudo-element */
+    background-color: transparent; /* Ensure the background is transparent */
+    box-sizing: border-box; /* Include the border in the element's total width and height */
+}
+
+/* Controls and player info */
+#controls, #player-info {
+    margin-top: 20px;
+    color: white;
+}
+
+/* Buttons */
+button {
+    margin: 5px;
+    padding: 5px 10px;
+    background-color: #4CAF50;
+    color: white;
+    border: none;
+    border-radius: 3px;
+    cursor: pointer;
+}
+
+button:hover {
+    background-color: #45a049;
+}
+
+button.selected-action {
+    background-color: #45a049;
+    font-weight: bold;
+    box-shadow: 0 0 5px #4CAF50;
+}
+
+/* Game over overlay */
+#game-over {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background-color: rgba(0, 0, 0, 0.8);
+    color: white;
+    padding: 20px;
+    border-radius: 10px;
+    text-align: center;
+    z-index: 1000;
+}
+
+#game-over h2 { margin-top: 0; }
+#game-over button { margin-top: 10px; }
+
+/* Editor controls */
+#editor-controls {
+    display: flex; /* Use flexbox for layout */
+    flex-wrap: wrap; /* Allow buttons to wrap onto the next line */
+    justify-content: center; /* Center the buttons */
+    padding: 10px 0;
+    text-align: center;
+    max-width: 600px; /* Set a maximum width for the container */
+    margin: 0 auto; /* Center the container */
+}
+
+/* Editor button styles */
+.editor-button {
+    display: inline-block;
+    vertical-align: top;
+    width: 22.5%; /* Adjust width to fit four buttons per row */
+    margin: 5px; /* Add margin for spacing */
+    text-align: center;
+    background-color: #4CAF50; /* Green background */
+    color: white; /* White text */
+    border: 2px solid #388E3C; /* Darker green border */
+    padding: 10px; /* Padding for better appearance */
+    border-radius: 5px; /* Rounded corners */
+    cursor: pointer; /* Pointer cursor on hover */
+    transition: background-color 0.3s, transform 0.2s; /* Smooth transition */
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1); /* Subtle shadow */
+}
+
+.editor-button:hover {
+    background-color: #45a049; /* Lighter green on hover */
+    transform: translateY(-2px); /* Slight lift effect on hover */
+}
+
+.editor-button .preview {
+    width: 40px;
+    height: 40px;
+    border: 2px solid #555;
+    margin: 0 auto 5px;
+    display: block;
+}
+
+.editor-button .preview.tile {
+    clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%);
+}
+
+.editor-button .preview.disc {
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    border: 3px solid #7f7474;
+    z-index: 2;
+}
+
+.editor-button .preview.disc.white { background-color: rgb(255, 255, 255); }
+.editor-button .preview.disc.black { background-color: rgb(0, 0, 0); }
+
+.editor-button .preview.ring {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    border: 3px solid #7f7474; /* Outer border */
+    position: relative;
+    box-sizing: border-box; /* Ensure padding and border are included in the element's total width and height */
+}
+
+.editor-button .preview.ring.white {
+    background-color: rgb(255, 255, 255); 
+    mask-image: radial-gradient(circle at center, transparent 0, transparent 10px, #fff 10px);
+}
+
+.editor-button .preview.ring.black {
+    background-color: rgb(0, 0, 0);
+    mask-image: radial-gradient(circle at center, transparent 0, transparent 10px, #000 10px);
+}
+
+.editor-button .preview.ring::after {
+    content: ''; /* Ensure the pseudo-element is rendered */
+    width: 24px; /* Adjusted to create an inner border */
+    height: 24px; /* Adjusted to create an inner border */
+    border-radius: 50%;
+    border: 3px solid #7f7474; /* Inner border for the ring */
+    position: absolute; /* Position it relative to the parent */
+    top: 50%; /* Center it vertically */
+    left: 50%; /* Center it horizontally */
+    transform: translate(-50%, -50%); /* Center the pseudo-element */
+    background-color: transparent; /* Ensure the background is transparent */
+    box-sizing: border-box; /* Include the border in the element's total width and height */
+}
+
+.editor-button span {
+    font-size: 12px;
+    color: white;
+    display: block;
+    word-wrap: break-word;
+}
+
+.editor-button.selected .preview {
+    box-shadow: 0 0 10px #4CAF50;
+}
+
+.editor-button .preview.remove {
+    background-color: #ff4136;
+    position: relative;
+}
+
+.editor-button .preview.remove::before,
+.editor-button .preview.remove::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 70%;
+    height: 4px;
+    background-color: white;
+    transform: translate(-50%, -50%) rotate(45deg);
+}
+
+.editor-button .preview.remove::after {
+    transform: translate(-50%, -50%) rotate(-45deg);
+}
+
+/* Tiles */
+.tile {
+    width: 50px;
+    height: 57.735px;
+    clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%);
+    z-index: 1;
+}
+
+.tile.white { background-color: #ffffff; }
+.tile.black { background-color: #000000; }
+
+.highlight-indicator {
+    position: absolute;
+    width: 50px; 
+    height: 50px; 
+    border-radius: 50%;
+    border: 4px solid #15ff00; 
+    top: 50%; 
+    left: 50%;
+    transform: translate(-50%, -50%); 
+    background-color: transparent;
+    box-sizing: border-box;
+    pointer-events: none;
+    z-index: 12;
+}
+
+/* Style for the Reset Captures button */
+.editor-button#reset-captures {
+    background-color: #4CAF50; /* Green background color */
+    color: white; /* White text */
+    border: 1px solid #4CAF50; /* Green border */
+}
