@@ -11,15 +11,18 @@ body {
 
 /* Game layout */
 #game-container {
-    background-color: #555;
-    padding: 20px;
-    border-radius: 10px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
 }
 
 #board {
     display: grid;
-    grid-template-columns: repeat(10, 50px);
-    grid-gap: 2px;
+    grid-template-columns: repeat(10, 1fr); /* Adjust based on your board size */
+    width: 90vw; /* Responsive width */
+    height: 90vw; /* Responsive height */
+    max-width: 600px; /* Max width for larger screens */
+    max-height: 600px; /* Max height for larger screens */
 }
 
 /* Hexagon tiles */
@@ -57,19 +60,22 @@ body {
 }
 
 .piece {
-    width: 10vw; /* Adjusted for responsive width */
-    height: 10vw; /* Adjusted for responsive height */
+    width: 10vw; /* Responsive width */
+    height: 10vw; /* Responsive height */
     border-radius: 50%;
     border: 3px solid #7f7474;
     z-index: 2;
+    display: flex;
+    justify-content: center;
+    align-items: center;
 }
 
 .piece.white { background-color: rgb(255, 255, 255); }
 .piece.black { background-color: rgb(0, 0, 0); }
 
 .piece.ring {
-    width: 15vw; /* Adjusted for responsive width */
-    height: 15vw; /* Adjusted for responsive height */
+    width: 15vw; /* Responsive width */
+    height: 15vw; /* Responsive height */
     border-radius: 50%;
     border: 3px solid #7f7474; /* Outer border */
     position: relative;
@@ -300,7 +306,7 @@ button.selected-action {
 
 @media (max-width: 375px) { /* iPhone 6/7/8 */
     .piece {
-        width: 8vw;
+        width: 8vw; /* Adjust size for smaller screens */
         height: 8vw;
     }
 
