@@ -57,8 +57,8 @@ body {
 }
 
 .piece {
-    width: 24px;
-    height: 24px;
+    width: 10vw; /* Adjusted for responsive width */
+    height: 10vw; /* Adjusted for responsive height */
     border-radius: 50%;
     border: 3px solid #7f7474;
     z-index: 2;
@@ -68,8 +68,8 @@ body {
 .piece.black { background-color: rgb(0, 0, 0); }
 
 .piece.ring {
-    width: 40px;
-    height: 40px;
+    width: 15vw; /* Adjusted for responsive width */
+    height: 15vw; /* Adjusted for responsive height */
     border-radius: 50%;
     border: 3px solid #7f7474; /* Outer border */
     position: relative;
@@ -296,4 +296,16 @@ button.selected-action {
     background-color: #4CAF50; /* Green background color */
     color: white; /* White text */
     border: 1px solid #4CAF50; /* Green border */
+}
+
+@media (max-width: 375px) { /* iPhone 6/7/8 */
+    .piece {
+        width: 8vw;
+        height: 8vw;
+    }
+
+    .piece.ring {
+        width: 12vw;
+        height: 12vw;
+    }
 }
