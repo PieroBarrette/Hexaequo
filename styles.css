@@ -14,28 +14,33 @@ body {
     display: flex;
     flex-direction: column;
     align-items: center;
+    width: 90vw; /* Responsive width */
+    max-width: 800px; /* Increased max width for larger screens */
 }
 
+/* Board */
 #board {
     display: grid;
-    grid-template-columns: repeat(10, 1fr); /* Adjust based on your board size */
-    width: 90vw; /* Responsive width */
-    height: 90vw; /* Responsive height */
-    max-width: 600px; /* Max width for larger screens */
-    max-height: 600px; /* Max height for larger screens */
+    grid-template-columns: repeat(10, 1fr); /* 10 columns for desktop */
+    width: 100%; /* Full width */
+    aspect-ratio: 1; /* Maintain a square aspect ratio */
+    max-width: 800px; /* Max width for larger screens */
+    max-height: 800px; /* Max height for larger screens */
 }
 
 /* Hexagon tiles */
 .hex {
-    width: 50px;
-    height: 57.735px;
+    width: 100%; /* Full width of the grid cell */
+    height: auto; /* Set height to auto to maintain aspect ratio */
+    padding-bottom: 11.55%; /* Maintain hexagon shape */
     background-color: #888;
     clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%);
     display: flex;
     justify-content: center;
     align-items: center;
     position: relative;
-    font-size: 12px;
+    font-size: 16px; /* Increased font size for better visibility */
+    margin: 0; /* Remove any default margin */
 }
 
 .hex::after {
@@ -60,11 +65,11 @@ body {
 }
 
 .piece {
-    width: 10vw; /* Responsive width */
-    height: 10vw; /* Responsive height */
+    width: 50%; 
+    height: 50%;
     border-radius: 50%;
     border: 3px solid #7f7474;
-    z-index: 2;
+    z-index: 3; /* Ensure it's above other elements */
     display: flex;
     justify-content: center;
     align-items: center;
@@ -74,8 +79,8 @@ body {
 .piece.black { background-color: rgb(0, 0, 0); }
 
 .piece.ring {
-    width: 15vw; /* Responsive width */
-    height: 15vw; /* Responsive height */
+    width: 85%; /* Responsive width */
+    height: 85%; /* Responsive height */
     border-radius: 50%;
     border: 3px solid #7f7474; /* Outer border */
     position: relative;
@@ -84,18 +89,18 @@ body {
 
 .piece.ring.white {
     background-color: rgb(255, 255, 255); 
-    mask-image: radial-gradient(circle at center, transparent 0, transparent 10px, #fff 10px);
+    mask-image: radial-gradient(circle at center, transparent 0, transparent 50%, #fff 50%);
 }
 
 .piece.ring.black {
     background-color: rgb(0, 0, 0);
-    mask-image: radial-gradient(circle at center, transparent 0, transparent 10px, #000 10px);
+    mask-image: radial-gradient(circle at center, transparent 0, transparent 50%, #000 50%);
 }
 
 .piece.ring::after {
     content: ''; /* Ensure the pseudo-element is rendered */
-    width: 24px; /* Adjusted to create an inner border */
-    height: 24px; /* Adjusted to create an inner border */
+    width: 50%; /* Adjusted to create an inner border */
+    height: 50%; /* Adjusted to create an inner border */
     border-radius: 50%;
     border: 3px solid #7f7474; /* Inner border for the ring */
     position: absolute; /* Position it relative to the parent */
@@ -165,17 +170,15 @@ button.selected-action {
 .editor-button {
     display: inline-block;
     vertical-align: top;
-    width: 22.5%; /* Adjust width to fit four buttons per row */
     margin: 5px; /* Add margin for spacing */
-    text-align: center;
+    padding: 5px 10px; /* Match the padding of regular buttons */
     background-color: #4CAF50; /* Green background */
     color: white; /* White text */
-    border: 2px solid #388E3C; /* Darker green border */
-    padding: 10px; /* Padding for better appearance */
-    border-radius: 5px; /* Rounded corners */
+    border: none; /* Remove border */
+    border-radius: 3px; /* Rounded corners */
     cursor: pointer; /* Pointer cursor on hover */
     transition: background-color 0.3s, transform 0.2s; /* Smooth transition */
-    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1); /* Subtle shadow */
+    box-shadow: none; /* Remove shadow for uniformity */
 }
 
 .editor-button:hover {
@@ -184,15 +187,12 @@ button.selected-action {
 }
 
 .editor-button .preview {
-    width: 40px;
-    height: 40px;
-    border: 2px solid #555;
-    margin: 0 auto 5px;
-    display: block;
+    display: none; /* Hide the preview graphics */
 }
 
 .editor-button .preview.tile {
     clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%);
+    height: 40px; /* Adjusted height to match other editor buttons */
 }
 
 .editor-button .preview.disc {
@@ -273,10 +273,11 @@ button.selected-action {
 
 /* Tiles */
 .tile {
-    width: 50px;
-    height: 57.735px;
+    width: 100%; /* Adjusted to fill the hexagon */
+    height: auto; /* Adjusted to maintain aspect ratio */
     clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%);
     z-index: 1;
+    padding-bottom: 100%; /* Adjusted to maintain hexagon shape */
 }
 
 .tile.white { background-color: #ffffff; }
@@ -284,8 +285,8 @@ button.selected-action {
 
 .highlight-indicator {
     position: absolute;
-    width: 50px; 
-    height: 50px; 
+    width: 90%; 
+    height: 90%; 
     border-radius: 50%;
     border: 4px solid #15ff00; 
     top: 50%; 
@@ -304,14 +305,19 @@ button.selected-action {
     border: 1px solid #4CAF50; /* Green border */
 }
 
+/* Media Queries */
 @media (max-width: 375px) { /* iPhone 6/7/8 */
-    .piece {
-        width: 8vw; /* Adjust size for smaller screens */
+    /* .piece {
+        width: 8vw; Adjust size for smaller screens 
         height: 8vw;
     }
 
     .piece.ring {
         width: 12vw;
         height: 12vw;
+    } */
+
+    #board {
+        grid-template-columns: repeat(5, 1fr); /* Adjust grid for smaller screens */
     }
 }

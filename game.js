@@ -488,7 +488,6 @@ function movePiece(from, toRow, toCol) {
     pieceElement.className = `piece ${piece.color} ${piece.type}`;
     board[toRow][toCol].element.innerHTML = '';
     board[toRow][toCol].element.appendChild(pieceElement);
-
 }
 
 // Function to switch turns between players
@@ -689,6 +688,7 @@ function initializeGame() {
     document.getElementById('game-controls').style.display = 'block';
 
     // Update the display
+    updateAllDisplays();
 }
 
 function setupEventListeners() {
