@@ -320,5 +320,53 @@ button.selected-action {
     #board {
         grid-template-columns: repeat(5, 1fr); /* Adjust grid for smaller screens */
     }
+    #pdf-section {
+        position: fixed; /* Fixed position to cover the entire screen */
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background-color: rgba(255, 255, 255, 0.95); /* Slightly transparent background */
+        z-index: 1000; /* Ensure it appears above other content */
+        display: none; /* Hidden by default */
+        flex-direction: column; /* Stack elements vertically */
+        align-items: center; /* Center items horizontally */
+        justify-content: flex-start; /* Align items to the top */
+        padding: 20px; /* Padding around the content */
+    }
     
+    #iframe {
+        flex-grow: 1; /* Allow iframe to take up remaining space */
+        width: 100%; /* Full width */
+        border: none; /* Remove border */
+    }
+
+    /* Media query for iPhone screens */
+    @media only screen and (max-width: 480px) {
+        #pdf-frame {
+            height: 80%; /* Adjust height for smaller screens */
+        }
+    }
+
+    /* Media query for desktop screens */
+    @media only screen and (min-width: 481px) {
+        #pdf-frame {
+            height: 90%; /* Adjust height for larger screens */
+        }
+    }
+    
+    #close-pdf {
+        margin-bottom: 10px; /* Space below the close button */
+        padding: 10px 15px; /* Button padding */
+        background-color: #007BFF; /* Button color */
+        color: white; /* Text color */
+        border: none; /* Remove border */
+        border-radius: 5px; /* Rounded corners */
+        cursor: pointer; /* Pointer cursor on hover */
+        align-self: flex-end; /* Align close button to the right */
+    }
+    
+    #close-pdf:hover {
+        background-color: #0056b3; /* Darker shade on hover */
+    }
 }

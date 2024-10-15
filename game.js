@@ -823,5 +823,13 @@ function resetCaptures() {
 document.getElementById('reset-captures').addEventListener('click', resetCaptures);
 
 document.getElementById('open-rules').addEventListener('click', function() {
-    window.open('rules.pdf', '_blank');
+    // Hide game controls and show the PDF section
+    document.getElementById('game-container').style.display = 'none'; // Hide the game container
+    document.getElementById('pdf-section').style.display = 'flex'; // Show the PDF section
+});
+
+document.getElementById('close-pdf').addEventListener('click', function() {
+    // Show game controls and hide the PDF section
+    document.getElementById('pdf-section').style.display = 'none'; // Hide the PDF section
+    document.getElementById('game-container').style.display = 'flex'; // Show the game container
 });
