@@ -821,3 +821,7 @@ function resetCaptures() {
 }
 
 document.getElementById('reset-captures').addEventListener('click', resetCaptures);
+
+document.getElementById('open-rules').addEventListener('click', function() {
+    window.open('rules.pdf', '_blank');
+});

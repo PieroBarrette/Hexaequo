@@ -320,4 +320,5 @@ button.selected-action {
     #board {
         grid-template-columns: repeat(5, 1fr); /* Adjust grid for smaller screens */
     }
+    
 }
