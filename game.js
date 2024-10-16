@@ -824,7 +824,7 @@ document.getElementById('reset-captures').addEventListener('click', resetCapture
 
 // Function to open the rules modal
 function openRules() {
-    document.getElementById('rules-modal').style.display = 'inline-block';
+    document.getElementById('rules-modal').style.display = 'block';
     document.getElementById('game-container').style.display = 'none'; // Hide the game
 
 }
@@ -832,7 +832,7 @@ function openRules() {
 // Function to close the rules modal
 function closeRules() {
     document.getElementById('rules-modal').style.display = 'none';
-    document.getElementById('game-container').style.display = 'inline-block'; // Show the game
+    document.getElementById('game-container').style.display = 'block'; // Show the game
 }
 
 // Event listeners for opening and closing the modal
