@@ -4,8 +4,8 @@ body {
     display: flex;
     justify-content: center;
     align-items: center;
-    height: 100vh;
-    margin: 0;
+    height: 100%;
+    margin-top: 10%;
     font-family: Arial, sans-serif;
 }
 
@@ -14,8 +14,8 @@ body {
     display: flex;
     flex-direction: column;
     align-items: center;
-    width: 90vw; /* Responsive width */
-    max-width: 800px; /* Increased max width for larger screens */
+    width: 100%; /* Responsive width */
+    max-width: 50vw; /* Increased max width for larger screens */
 }
 
 /* Board */
@@ -23,24 +23,26 @@ body {
     display: grid;
     grid-template-columns: repeat(10, 1fr); /* 10 columns for desktop */
     width: 100%; /* Full width */
-    aspect-ratio: 1; /* Maintain a square aspect ratio */
-    max-width: 800px; /* Max width for larger screens */
-    max-height: 800px; /* Max height for larger screens */
+    aspect-ratio: 1;
+    max-width: 100%; /* Max width for larger screens */
+    max-height: 100%; /* Max height for larger screens */
+    grid-row-gap: 0; /* Adjusted spacing between rows */
+    grid-column-gap: 1%; /* Made spacing between columns adaptable to screen size */
 }
 
 /* Hexagon tiles */
 .hex {
-    width: 100%; /* Full width of the grid cell */
-    height: auto; /* Set height to auto to maintain aspect ratio */
-    padding-bottom: 11.55%; /* Maintain hexagon shape */
+    width: 100%;
+    height: 100%; 
+    padding-bottom: 5%;
     background-color: #888;
     clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%);
     display: flex;
     justify-content: center;
     align-items: center;
     position: relative;
-    font-size: 16px; /* Increased font size for better visibility */
-    margin: 0; /* Remove any default margin */
+    font-size: 200%;
+    margin: 0; 
 }
 
 .hex::after {
@@ -50,13 +52,12 @@ body {
     left: 50%;
     transform: translate(-50%, -50%);
     color: #FFD700;
-    text-shadow: -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 1px 1px 0 #000;
     z-index: 10;
     pointer-events: none;
 }
 
 .hex.even-row {
-    transform: translateX(25px);
+    transform: translateX(50%);
 }
 
 /* Game pieces */
@@ -66,10 +67,10 @@ body {
 
 .piece {
     width: 50%; 
-    height: 50%;
+    height: 45%;
     border-radius: 50%;
-    border: 3px solid #7f7474;
-    z-index: 3; /* Ensure it's above other elements */
+    border: 0.3vw solid #7f7474;
+    z-index: 3;
     display: flex;
     justify-content: center;
     align-items: center;
@@ -79,52 +80,48 @@ body {
 .piece.black { background-color: rgb(0, 0, 0); }
 
 .piece.ring {
-    width: 85%; /* Responsive width */
-    height: 85%; /* Responsive height */
+    width: 80%;
+    height: 70%; 
     border-radius: 50%;
-    border: 3px solid #7f7474; /* Outer border */
-    position: relative;
-    box-sizing: border-box; /* Ensure padding and border are included in the element's total width and height */
+    border: 0.3vw solid #7f7474;
+    position: absolute;
+    display: flex;
+    justify-content: center;
+    align-items: center;
 }
 
 .piece.ring.white {
-    background-color: rgb(255, 255, 255); 
-    mask-image: radial-gradient(circle at center, transparent 0, transparent 50%, #fff 50%);
+    background: radial-gradient(circle at center, #7f7474 0, #7f7474 40%, #ffffff 40%);; 
+    mask-size: cover; 
+    mask-image: radial-gradient(circle at center, transparent 0, transparent 30%, #ffffff 40%);
 }
 
 .piece.ring.black {
-    background-color: rgb(0, 0, 0);
-    mask-image: radial-gradient(circle at center, transparent 0, transparent 50%, #000 50%);
-}
-
-.piece.ring::after {
-    content: ''; /* Ensure the pseudo-element is rendered */
-    width: 50%; /* Adjusted to create an inner border */
-    height: 50%; /* Adjusted to create an inner border */
-    border-radius: 50%;
-    border: 3px solid #7f7474; /* Inner border for the ring */
-    position: absolute; /* Position it relative to the parent */
-    top: 50%; /* Center it vertically */
-    left: 50%; /* Center it horizontally */
-    transform: translate(-50%, -50%); /* Center the pseudo-element */
-    background-color: transparent; /* Ensure the background is transparent */
-    box-sizing: border-box; /* Include the border in the element's total width and height */
+    background: radial-gradient(circle at center, #7f7474 0, #7f7474 40%, #000000 40%);
+    mask-size: cover; 
+    mask-image: radial-gradient(circle at center, transparent 0, transparent 30%, #000000 40%);
 }
 
 /* Controls and player info */
 #controls, #player-info {
-    margin-top: 20px;
+    width: 100%;
+    height: 100%; 
+    font-size: 200%;
+    display: flex flex;
+    flex-wrap: wrap;
+    margin-top: 5%;
     color: white;
 }
 
 /* Buttons */
 button {
-    margin: 5px;
-    padding: 5px 10px;
+    font-size: 100%;
+    margin: 3%;
+    padding: 3%;
     background-color: #4CAF50;
     color: white;
     border: none;
-    border-radius: 3px;
+    border-radius: 3%;
     cursor: pointer;
 }
 
@@ -135,7 +132,35 @@ button:hover {
 button.selected-action {
     background-color: #45a049;
     font-weight: bold;
-    box-shadow: 0 0 5px #4CAF50;
+    border: 0.3vw solid #ffffff;
+}
+
+/* Editor button styles */
+.editor-button {
+    margin: 3%;
+    padding: 3%;
+    background-color: #4CAF50;
+    color: white;
+    border: none;
+    border-radius: 3%;
+    cursor: pointer;
+}
+
+.editor-button:hover {
+    background-color: #45a049;
+}
+
+.editor-button.selected {
+    background-color: #45a049;
+    font-weight: bold;
+    border: 0.3vw solid #ffffff;
+}
+
+.editor-button span {
+    font-size: 100%;
+    color: white;
+    display: flex;
+    word-wrap: break-word;
 }
 
 /* Game over overlay */
@@ -146,149 +171,31 @@ button.selected-action {
     transform: translate(-50%, -50%);
     background-color: rgba(0, 0, 0, 0.8);
     color: white;
-    padding: 20px;
-    border-radius: 10px;
+    border-radius: 10%;
     text-align: center;
     z-index: 1000;
 }
 
 #game-over h2 { margin-top: 0; }
-#game-over button { margin-top: 10px; }
-
-/* Editor controls */
-#editor-controls {
-    display: flex; /* Use flexbox for layout */
-    flex-wrap: wrap; /* Allow buttons to wrap onto the next line */
-    justify-content: center; /* Center the buttons */
-    padding: 10px 0;
-    text-align: center;
-    max-width: 600px; /* Set a maximum width for the container */
-    margin: 0 auto; /* Center the container */
-}
-
-/* Editor button styles */
-.editor-button {
-    display: inline-block;
-    vertical-align: top;
-    margin: 5px; /* Add margin for spacing */
-    padding: 5px 10px; /* Match the padding of regular buttons */
-    background-color: #4CAF50; /* Green background */
-    color: white; /* White text */
-    border: none; /* Remove border */
-    border-radius: 3px; /* Rounded corners */
-    cursor: pointer; /* Pointer cursor on hover */
-    transition: background-color 0.3s, transform 0.2s; /* Smooth transition */
-    box-shadow: none; /* Remove shadow for uniformity */
-}
-
-.editor-button:hover {
-    background-color: #45a049; /* Lighter green on hover */
-    transform: translateY(-2px); /* Slight lift effect on hover */
-}
-
-.editor-button .preview {
-    display: none; /* Hide the preview graphics */
-}
-
-.editor-button .preview.tile {
-    clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%);
-    height: 40px; /* Adjusted height to match other editor buttons */
-}
-
-.editor-button .preview.disc {
-    width: 24px;
-    height: 24px;
-    border-radius: 50%;
-    border: 3px solid #7f7474;
-    z-index: 2;
-}
-
-.editor-button .preview.disc.white { background-color: rgb(255, 255, 255); }
-.editor-button .preview.disc.black { background-color: rgb(0, 0, 0); }
-
-.editor-button .preview.ring {
-    width: 40px;
-    height: 40px;
-    border-radius: 50%;
-    border: 3px solid #7f7474; /* Outer border */
-    position: relative;
-    box-sizing: border-box; /* Ensure padding and border are included in the element's total width and height */
-}
-
-.editor-button .preview.ring.white {
-    background-color: rgb(255, 255, 255); 
-    mask-image: radial-gradient(circle at center, transparent 0, transparent 10px, #fff 10px);
-}
-
-.editor-button .preview.ring.black {
-    background-color: rgb(0, 0, 0);
-    mask-image: radial-gradient(circle at center, transparent 0, transparent 10px, #000 10px);
-}
-
-.editor-button .preview.ring::after {
-    content: ''; /* Ensure the pseudo-element is rendered */
-    width: 24px; /* Adjusted to create an inner border */
-    height: 24px; /* Adjusted to create an inner border */
-    border-radius: 50%;
-    border: 3px solid #7f7474; /* Inner border for the ring */
-    position: absolute; /* Position it relative to the parent */
-    top: 50%; /* Center it vertically */
-    left: 50%; /* Center it horizontally */
-    transform: translate(-50%, -50%); /* Center the pseudo-element */
-    background-color: transparent; /* Ensure the background is transparent */
-    box-sizing: border-box; /* Include the border in the element's total width and height */
-}
-
-.editor-button span {
-    font-size: 12px;
-    color: white;
-    display: block;
-    word-wrap: break-word;
-}
-
-.editor-button.selected .preview {
-    box-shadow: 0 0 10px #4CAF50;
-}
-
-.editor-button .preview.remove {
-    background-color: #ff4136;
-    position: relative;
-}
-
-.editor-button .preview.remove::before,
-.editor-button .preview.remove::after {
-    content: '';
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    width: 70%;
-    height: 4px;
-    background-color: white;
-    transform: translate(-50%, -50%) rotate(45deg);
-}
-
-.editor-button .preview.remove::after {
-    transform: translate(-50%, -50%) rotate(-45deg);
-}
+#game-over button { margin-top: 10%; }
 
 /* Tiles */
 .tile {
-    width: 100%; /* Adjusted to fill the hexagon */
-    height: auto; /* Adjusted to maintain aspect ratio */
+    width: 100%; 
+    height: 100%;
     clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%);
     z-index: 1;
-    padding-bottom: 100%; /* Adjusted to maintain hexagon shape */
 }
 
-.tile.white { background-color: #ffffff; }
-.tile.black { background-color: #000000; }
+.tile.white { background-color: #ffffff;}
+.tile.black { background-color: #000000;}
 
 .highlight-indicator {
     position: absolute;
     width: 90%; 
-    height: 90%; 
+    height: 80%; 
     border-radius: 50%;
-    border: 4px solid #15ff00; 
+    border: 0.3vw solid #15ff00; 
     top: 50%; 
     left: 50%;
     transform: translate(-50%, -50%); 
@@ -298,75 +205,33 @@ button.selected-action {
     z-index: 12;
 }
 
-/* Style for the Reset Captures button */
-.editor-button#reset-captures {
-    background-color: #4CAF50; /* Green background color */
-    color: white; /* White text */
-    border: 1px solid #4CAF50; /* Green border */
+/* Modal styles */
+.modal {
+    display: none;
+    z-index: 1000; 
+    left: 0;
+    top: 0;
+    width: 100%; 
+    height: 100%;
+    overflow: auto; 
 }
 
-/* Media Queries */
-@media (max-width: 375px) { /* iPhone 6/7/8 */
-    /* .piece {
-        width: 8vw; Adjust size for smaller screens 
-        height: 8vw;
-    }
+.modal-content {
+    background-color: white;
+    width: 100%;
+    height: 100%;
+}
 
-    .piece.ring {
-        width: 12vw;
-        height: 12vw;
-    } */
+.close-button {
+    color: #aaa;
+    float: left;
+    font-size: 300%;
+    font-weight: bold;
+}
 
-    #board {
-        grid-template-columns: repeat(5, 1fr); /* Adjust grid for smaller screens */
-    }
-    #pdf-section {
-        position: fixed; /* Fixed position to cover the entire screen */
-        top: 0;
-        left: 0;
-        width: 100%;
-        height: 100%;
-        background-color: rgba(255, 255, 255, 0.95); /* Slightly transparent background */
-        z-index: 1000; /* Ensure it appears above other content */
-        display: none; /* Hidden by default */
-        flex-direction: column; /* Stack elements vertically */
-        align-items: center; /* Center items horizontally */
-        justify-content: flex-start; /* Align items to the top */
-        padding: 20px; /* Padding around the content */
-    }
-    
-    #iframe {
-        flex-grow: 1; /* Allow iframe to take up remaining space */
-        width: 100%; /* Full width */
-        border: none; /* Remove border */
-    }
-
-    /* Media query for iPhone screens */
-    @media only screen and (max-width: 480px) {
-        #pdf-frame {
-            height: 80%; /* Adjust height for smaller screens */
-        }
-    }
-
-    /* Media query for desktop screens */
-    @media only screen and (min-width: 481px) {
-        #pdf-frame {
-            height: 90%; /* Adjust height for larger screens */
-        }
-    }
-    
-    #close-pdf {
-        margin-bottom: 10px; /* Space below the close button */
-        padding: 10px 15px; /* Button padding */
-        background-color: #007BFF; /* Button color */
-        color: white; /* Text color */
-        border: none; /* Remove border */
-        border-radius: 5px; /* Rounded corners */
-        cursor: pointer; /* Pointer cursor on hover */
-        align-self: flex-end; /* Align close button to the right */
-    }
-    
-    #close-pdf:hover {
-        background-color: #0056b3; /* Darker shade on hover */
-    }
+.close-button:hover,
+.close-button:focus {
+    color: black;
+    text-decoration: none;
+    cursor: pointer;
 }

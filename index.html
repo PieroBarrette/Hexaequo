@@ -16,9 +16,11 @@
     <link rel="apple-touch-icon" href="icon-192x192.png">
 </head>
 <body>
-    <div id="pdf-section" style="display: none;">
-        <button id="close-pdf" aria-label="Close PDF">Close</button>
-        <iframe id="pdf-frame" src="rules.pdf" width="100%" height="100%"></iframe>
+    <div id="rules-modal" class="modal">
+        <div class="modal-content">
+            <span class="close-button" id="close-rules">&times;</span>
+            <iframe id="rules-pdf" src="rules.pdf" width="100%" height="100%"></iframe>
+        </div>
     </div>
     <!-- Main container for the game -->
     <div id="game-container">
@@ -49,35 +51,27 @@
             <!-- Add this inside the #controls div, after the existing buttons -->
             <div id="editor-controls" style="display: none;">
                 <div class="editor-button" data-type="tile" data-color="white">
-                    <div class="preview tile white"></div>
                     <span>White Tile</span>
                 </div>
                 <div class="editor-button" data-type="tile" data-color="black">
-                    <div class="preview tile black"></div>
                     <span>Black Tile</span>
                 </div>
                 <div class="editor-button" data-type="disc" data-color="white">
-                    <div class="preview disc white"></div>
                     <span>White Disc</span>
                 </div>
                 <div class="editor-button" data-type="disc" data-color="black">
-                    <div class="preview disc black"></div>
                     <span>Black Disc</span>
                 </div>
                 <div class="editor-button" data-type="ring" data-color="white">
-                    <div class="preview ring white"></div>
                     <span>White Ring</span>
                 </div>
                 <div class="editor-button" data-type="ring" data-color="black">
-                    <div class="preview ring black"></div>
                     <span>Black Ring</span>
                 </div>
                 <div class="editor-button" id="remove">
-                    <div class="preview remove"></div>
                     <span>Remove</span>
                 </div>
                 <div class="editor-button" id="reset-captures">
-                    <div class="preview"></div>
                     <span>Reset Captures</span>
                 </div>
             </div>

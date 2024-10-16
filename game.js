@@ -822,14 +822,27 @@ function resetCaptures() {
 
 document.getElementById('reset-captures').addEventListener('click', resetCaptures);
 
-document.getElementById('open-rules').addEventListener('click', function() {
-    // Hide game controls and show the PDF section
-    document.getElementById('game-container').style.display = 'none'; // Hide the game container
-    document.getElementById('pdf-section').style.display = 'flex'; // Show the PDF section
-});
+// Function to open the rules modal
+function openRules() {
+    document.getElementById('rules-modal').style.display = 'inline-block';
+    document.getElementById('game-container').style.display = 'none'; // Hide the game
 
-document.getElementById('close-pdf').addEventListener('click', function() {
-    // Show game controls and hide the PDF section
-    document.getElementById('pdf-section').style.display = 'none'; // Hide the PDF section
-    document.getElementById('game-container').style.display = 'flex'; // Show the game container
+}
+
+// Function to close the rules modal
+function closeRules() {
+    document.getElementById('rules-modal').style.display = 'none';
+    document.getElementById('game-container').style.display = 'inline-block'; // Show the game
+}
+
+// Event listeners for opening and closing the modal
+document.getElementById('open-rules').addEventListener('click', openRules);
+document.getElementById('close-rules').addEventListener('click', closeRules);
+
+// Close the modal when clicking outside of the modal content
+window.addEventListener('click', function(event) {
+    const modal = document.getElementById('rules-modal');
+    if (event.target === modal) {
+        closeRules();
+    }
 });
