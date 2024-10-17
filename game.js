@@ -474,8 +474,11 @@ function movePiece(from, toRow, toCol) {
         if (from.row % 2 === 0) {
             offset = 1;
         }
-        const middleRow = from.row + Math.floor((toRow - from.row) / 2);
-        const middleCol = from.col + Math.floor((toCol - from.col) / 2) + offset;
+        let middleRow = from.row + Math.floor((toRow - from.row) / 2);
+        let middleCol = from.col + Math.floor((toCol - from.col) / 2);
+        if((toRow - from.row) !== 0){
+            middleCol = from.col + Math.floor((toCol - from.col) / 2) + offset;
+        }
         // Capture the jumped piece if it's an opponent's piece
         if (board[middleRow][middleCol].piece && board[middleRow][middleCol].piece.color !== currentPlayer) {
             capturePiece(middleRow, middleCol);
