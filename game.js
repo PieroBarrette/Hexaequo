@@ -392,10 +392,13 @@ function getLegalMoves(row, col) {
             if (row % 2 === 0) {
                 offset = 1;
             }
-            const middleRow = row + Math.floor(dx / 2);
-            const middleCol = col + Math.floor(dy / 2) + offset;
-            const jumpRow = row + dx;
-            const jumpCol = col + dy;
+            let middleRow = row + Math.floor(dx / 2);
+            let middleCol = col + Math.floor(dy / 2);
+            if(dx !== 0){
+                middleCol = col + Math.floor(dy / 2) + offset;
+            }
+            let jumpRow = row + dx;
+            let jumpCol = col + dy;
 
             // Check if the positions are valid before accessing them
             if (isValidPosition(middleRow, middleCol) && isValidPosition(jumpRow, jumpCol) && 
