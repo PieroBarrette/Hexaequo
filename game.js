@@ -695,6 +695,7 @@ function initializeGame() {
 
     // Update the display
     updateAllDisplays();
+    closeRules();
 }
 
 function setupEventListeners() {
