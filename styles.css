@@ -209,8 +209,9 @@ button.selected-action {
     z-index: 12;
 }
 
+
 /* Modal styles */
-.modal {
+/*.modal {
     display: none;
     z-index: 1000; 
     left: 0;
@@ -234,4 +235,5 @@ button.selected-action {
     color: black;
     text-decoration: none;
     cursor: pointer;
-}
+}*/
+

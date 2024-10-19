@@ -16,18 +16,11 @@
     <link rel="apple-touch-icon" href="icon-192x192.png">
 </head>
 <body>
-    <div id="rules-modal" class="modal">
-        <div class="modal-content">
-            <span class="close-button" id="close-rules">&times;</span>
-            <iframe src="rules.pdf" style="width: device-width; height: auto;" frameborder="0" allowfullscreen></iframe>
-        </div>
-    </div>
     <!-- Main container for the game -->
     <div id="game-container">
         <div style="font-size: 200%; font-family: sans-serif; color: white;">HEXAEQUO</div>
         <!-- Container for the game board -->
         <div id="board"></div>
-        <!-- Container for game controls -->
         <div id="controls">
             <!-- Button to toggle notation on/off -->
             <button id="toggle-notation">Toggle Notation</button>
@@ -47,7 +40,6 @@
                     <!-- Button to end the current player's turn -->
                     <button id="end-turn">End Turn</button>
                 </div>
-                <button id="open-rules" aria-label="Read the rules">View Rules</button>
             </div>
             <!-- Add this inside the #controls div, after the existing buttons -->
             <div id="editor-controls" style="display: none;">
@@ -77,7 +69,7 @@
                 </div>
             </div>
         </div>
-        <!-- Container for player information -->
+        <div><a href="https://green-shanta-13.tiiny.site/" style="color:white;">View rules</a></div>
         <div id="player-info">
             <!-- Display the current player's turn -->
             <div id="current-player"></div>

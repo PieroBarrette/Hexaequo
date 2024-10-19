@@ -830,7 +830,7 @@ function resetCaptures() {
 document.getElementById('reset-captures').addEventListener('click', resetCaptures);
 
 // Function to open the rules modal
-function openRules() {
+/*function openRules() {
     document.getElementById('rules-modal').style.display = 'flex';
     document.getElementById('game-container').style.display = 'none'; // Hide the game
 
@@ -852,4 +852,4 @@ window.addEventListener('click', function(event) {
     if (event.target === modal) {
         closeRules();
     }
-});
+});*/
