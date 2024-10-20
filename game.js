@@ -159,7 +159,7 @@ function toggleMode() {
     editorMode = !editorMode;
     document.getElementById('editor-controls').style.display = editorMode ? 'block' : 'none';
     document.getElementById('game-controls').style.display = editorMode ? 'none' : 'block';
-    document.getElementById('toggle-mode').textContent = editorMode ? 'Enter Play Mode' : 'Enter Editor Mode';
+    document.getElementById('toggle-mode').textContent = editorMode ? 'Play Mode' : 'Editor Mode';
     clearSelection();
     currentAction = null;
     selectedEditorPiece = null;
@@ -797,7 +797,7 @@ function updateBoardDisplay() {
 
 function updateCurrentPlayerDisplay() {
     const currentPlayerElement = document.getElementById('current-player');
-    currentPlayerElement.textContent = `Current Player: ${currentPlayer.charAt(0).toUpperCase() + currentPlayer.slice(1)}`;
+    currentPlayerElement.textContent = `Current player: ${currentPlayer.charAt(0).toUpperCase() + currentPlayer.slice(1)}`;
 }
 
 // Add this function to update all displays
