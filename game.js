@@ -289,7 +289,7 @@ function removePiece(row, col) {
 
 // Function to check if a tile can be placed at a given position
 function canPlaceTile(row, col) {
-    if (board[row][col].tile) return false;
+    if (board[row][col].tile || inventory[currentPlayer].tiles === 0) return false;
     
     const directions = row % 2 === 0 ?
          [[-1, 0], [-1, 1], [0, 1], [1, 1], [1, 0], [0, -1]] : // Even row
@@ -311,7 +311,8 @@ function canPlaceTile(row, col) {
 function canPlacePiece(row, col) {
     return board[row][col].tile && 
            board[row][col].tile.color === currentPlayer && 
-           !board[row][col].piece;
+           !board[row][col].piece && 
+           (inventory[currentPlayer].discs > 0 || (inventory[currentPlayer].rings > 0 && inventory[currentPlayer].capturedDiscs > 0));
 }
 
 // Function to highlight valid tile placements
@@ -499,6 +500,7 @@ function movePiece(from, toRow, toCol) {
 // Function to switch turns between players
 function switchTurn() {
     currentPlayer = currentPlayer === PLAYER_WHITE ? PLAYER_BLACK : PLAYER_WHITE;
+    checkGameOver();
     updateAllDisplays();
 }
 
