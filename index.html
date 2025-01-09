@@ -30,6 +30,8 @@
             <button id="toggle-notation">Notation</button>
             <!-- Button to switch between play and editor mode -->
             <button id="toggle-mode">Editor mode</button>
+            <!-- Button to toggle AI opponent -->
+            <button id="toggle-ai">Play vs AI</button>
             <!-- Container for action buttons (hidden by default) -->
             <div id="game-controls" style="display: flow-root;">
                 <div id="action-buttons">
@@ -96,7 +98,9 @@
             </div>
         </div>
     </div>
-    <!-- Link to the external JavaScript file -->
+    <!-- Link to the external JavaScript files -->
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest"></script>
+    <script src="alphazero.js"></script>
     <script src="game.js"></script>
 </body>
 </html>

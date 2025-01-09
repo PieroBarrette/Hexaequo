@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Entraînement Hexaequo</title>
+    <style>
+        body {
+            background-color: #333;
+            color: white;
+            font-family: Arial, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 20px;
+        }
+        button {
+            padding: 15px 30px;
+            margin: 10px;
+            font-size: 18px;
+            cursor: pointer;
+            border: none;
+            border-radius: 5px;
+        }
+        #start {
+            background-color: #4CAF50;
+            color: white;
+        }
+        #stop {
+            background-color: #f44336;
+            color: white;
+        }
+        #metrics {
+            margin-top: 20px;
+            width: 80%;
+            max-width: 600px;
+            background-color: #444;
+            padding: 20px;
+            border-radius: 5px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Entraînement Hexaequo</h1>
+    <div>
+        <button id="start">Démarrer l'entraînement</button>
+        <button id="stop">Arrêter l'entraînement</button>
+    </div>
+    <div id="metrics">
+        <h2>Métriques d'entraînement</h2>
+        <pre id="metrics-content">Current game: </pre>
+        <div id="current-game"></div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest"></script>
+    <script src="alphazero.js"></script>
+    <script src="game.js"></script>
+    <script>
+        // Déclarer les fonctions globalement
+        window.startContinuousTraining = async function() {
+            try {
+                console.log("Initialisation de l'entraînement continu...");
+                if (typeof SelfPlay === 'undefined') {
+                    console.error("La classe SelfPlay n'est pas définie.");
+                    return;
+                }
+                window.continuousTrainer = new SelfPlay(1000);
+                
+                // Ajouter un observateur de métriques
+                window.continuousTrainer.metrics.onUpdate = function(metrics) {
+                    updateMetrics(metrics.getReport());
+                };
+                
+                await window.continuousTrainer.trainContinuously();
+            } catch (error) {
+                console.error("Erreur dans l'entraînement continu:", error);
+            }
+        };
+
+        window.stopContinuousTraining = function() {
+            if (window.continuousTrainer) {
+                window.continuousTrainer.stopTraining();
+                window.continuousTrainer = null;
+            }
+        };
+
+        // Ajouter les écouteurs d'événements
+        document.getElementById('start').addEventListener('click', async () => {
+            try {
+                await window.startContinuousTraining();
+            } catch (error) {
+                console.error("Erreur lors du démarrage:", error);
+            }
+        });
+
+        document.getElementById('stop').addEventListener('click', () => {
+            window.stopContinuousTraining();
+        });
+
+        // Ajouter cette fonction pour mettre à jour les métriques
+        function updateMetrics(metrics) {
+            const metricsContent = document.getElementById('metrics-content');
+            metricsContent.innerHTML = `Partie en cours: ${metrics.totalGames}`;
+        }
+    </script>
+</body>
+</html> 

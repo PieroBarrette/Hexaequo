@@ -9,7 +9,6 @@ let playMode = true; // Whether the game is in play mode or editor mode
 let showNotation = false; // Whether to show algebraic notation on the board
 let jumped = false;
 
-
 // Initialize the game board and player inventories
 const board = [];
 const inventory = {
@@ -25,6 +24,11 @@ let currentAction = null; // Current action being performed (e.g., place tile, m
 // Add these variables at the top of your file
 let editorMode = false;
 let selectedEditorPiece = null;
+let aiPlayer = null;
+let isAIEnabled = false;
+let aiEnabled = false;
+let ai = null;
+let continuousTrainer = null;
 
 // Function to initialize the game board
 function initializeBoard() {
@@ -500,17 +504,43 @@ function movePiece(from, toRow, toCol) {
 // Function to switch turns between players
 function switchTurn() {
     currentPlayer = currentPlayer === PLAYER_WHITE ? PLAYER_BLACK : PLAYER_WHITE;
-    checkGameOver();
+    if (!checkGameOver() && currentPlayer === PLAYER_BLACK) {
+        setTimeout(makeAIMove, 500); // Délai pour une meilleure expérience utilisateur
+    }
     updateAllDisplays();
 }
 
 // Function to end the current turn
 function endTurn() {
-    clearSelection();
-    currentAction = null;
-    jumped = false;
-    if (!checkGameOver()) {
-        switchTurn();
+    if (isGameOver()) return;
+    
+    currentPlayer = currentPlayer === PLAYER_WHITE ? PLAYER_BLACK : PLAYER_WHITE;
+    updateCurrentPlayerDisplay();
+    
+    // If AI is enabled and it's black's turn, make AI move
+    if (aiEnabled && currentPlayer === PLAYER_BLACK) {
+        setTimeout(async () => {
+            const state = new HexaequoState(board, inventory, currentPlayer);
+            const action = await ai.mcts.search(state);
+            
+            // Apply the AI's chosen action
+            switch(action.type) {
+                case 'place-tile':
+                    placeTile(action.row, action.col);
+                    break;
+                case 'place-disc':
+                    placePiece(action.row, action.col, 'disc');
+                    break;
+                case 'place-ring':
+                    placePiece(action.row, action.col, 'ring');
+                    break;
+                case 'move':
+                    movePiece(action.from, action.to);
+                    break;
+            }
+            
+            endTurn();
+        }, 500); // Add a small delay for better UX
     }
 }
 
@@ -650,6 +680,11 @@ function resetGame() {
     setupInitialState();
     currentPlayer = PLAYER_BLACK;
     currentAction = null;
+    
+    // Reset AI if enabled
+    if (aiEnabled) {
+        ai = initializeAI();
+    }
 }
 
 function removeTile(row, col) {
@@ -698,6 +733,7 @@ function initializeGame() {
     // Update the display
     updateAllDisplays();
     closeRules();
+    addAIButton();
 }
 
 function setupEventListeners() {
@@ -855,3 +891,105 @@ window.addEventListener('click', function(event) {
         closeRules();
     }
 });*/
+
+// Ajouter après la fonction switchTurn()
+function makeAIMove() {
+    if (currentPlayer === PLAYER_BLACK && AI_ENABLED) {
+        const state = new HexaequoState(board, inventory, currentPlayer);
+        const ai = new LightZero.MCTS(state);
+        const bestAction = ai.search(AI_THINKING_TIME);
+        state.applyAction(bestAction);
+        endTurn();
+    }
+}
+
+// Ajouter cette fonction pour initialiser l'IA
+async function initializeAI() {
+    try {
+        console.log("Initialisation de l'IA...");
+        if (typeof SelfPlay === 'undefined') {
+            console.error("La classe SelfPlay n'est pas définie. Vérifiez que alphazero.js est bien chargé.");
+            return;
+        }
+        const selfPlay = new SelfPlay(1000);
+        console.log("Entraînement de l'IA...");
+        await selfPlay.train();  // Entraîner l'IA
+        aiPlayer = selfPlay.mcts;
+        isAIEnabled = true;
+        console.log("IA initialisée et entraînée avec succès !");
+    } catch (error) {
+        console.error("Erreur lors de l'initialisation de l'IA:", error);
+        isAIEnabled = false;
+    }
+}
+
+// Ajouter cette fonction pour appliquer l'action de l'IA
+function applyAIAction(action) {
+    switch(action.type) {
+        case 'place-tile':
+            placeTile(action.row, action.col);
+            break;
+        case 'place-disc':
+            placePiece(action.row, action.col, 'disc');
+            break;
+        case 'place-ring':
+            placePiece(action.row, action.col, 'ring');
+            break;
+        case 'move':
+            movePiece(action.from.row, action.from.col, action.to.row, action.to.col);
+            break;
+    }
+}
+
+// Ajouter un bouton pour démarrer une partie contre l'IA
+function addAIButton() {
+    const controls = document.getElementById('game-controls');
+    const aiButton = document.createElement('button');
+    aiButton.id = 'start-ai';
+    aiButton.textContent = 'Jouer contre l\'IA';
+    aiButton.onclick = initializeAI;
+    controls.appendChild(aiButton);
+}
+
+// Add after other event listeners
+document.getElementById('toggle-ai').addEventListener('click', function() {
+    aiEnabled = !aiEnabled;
+    this.classList.toggle('selected-action');
+    
+    if (aiEnabled && !ai) {
+        // Initialize AI if not already done
+        ai = initializeAI();
+    }
+    
+    // Update display
+    this.textContent = aiEnabled ? 'AI Enabled' : 'Play vs AI';
+});
+
+// Add this function
+async function startContinuousTraining() {
+    try {
+        console.log("Initialisation de l'entraînement continu...");
+        if (typeof SelfPlay === 'undefined') {
+            console.error("La classe SelfPlay n'est pas définie. Vérifiez que alphazero.js est bien chargé.");
+            return;
+        }
+        continuousTrainer = new SelfPlay(1000);
+        await continuousTrainer.trainContinuously();
+    } catch (error) {
+        console.error("Erreur dans l'entraînement continu:", error);
+    }
+}
+
+// Add this function
+function stopContinuousTraining() {
+    if (continuousTrainer) {
+        continuousTrainer.stopTraining();
+        continuousTrainer = null;
+    }
+}
+
+// You can start the training by running this in your browser's console:
+// startContinuousTraining()
+
+// And stop it with:
+// stopContinuousTraining()
