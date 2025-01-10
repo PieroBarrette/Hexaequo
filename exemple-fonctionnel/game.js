@@ -839,18 +839,8 @@ function checkGameOver() {
             }
         }
         
-        // Vérifier si nous sommes en mode entraînement automatique
-        const isAutoTraining = aiPlayer?.neuralNetwork?.isTraining || 
-                             document.getElementById('start-training')?.disabled;
-        
-        // Afficher le game over sauf pendant l'entraînement automatique
-        if (!isAutoTraining) {
-            console.log('Displaying game over screen. Winner:', winner);
-            displayGameOver(winner);
-        } else {
-            console.log('Skipping game over display during auto-training');
-        }
-        
+        // Toujours afficher le game over
+        displayGameOver(winner);
         return true;
     }
     return false;
@@ -930,22 +920,57 @@ function displayGameOver(winner) {
 
     const gameOverElement = document.createElement('div');
     gameOverElement.id = 'game-over';
-    gameOverElement.innerHTML = `
-        <h2>Game Over</h2>
-        <p>${winner === 'Ex Aequo' ? 'It\'s Ex Aequo!' : `${winner.charAt(0).toUpperCase() + winner.slice(1)} wins!`}</p>
-        <button id="reset-game">New Game</button>
-    `;
-    document.body.appendChild(gameOverElement);
 
+    if (winner === 'training-completed') {
+        gameOverElement.innerHTML = `
+            <h2>Training Completed</h2>
+            <p>AI has completed the training session</p>
+            <button id="reset-game">Start New Game</button>
+        `;
+    } else {
+        gameOverElement.innerHTML = `
+            <h2>Game Over</h2>
+            <p>${winner === 'Ex Aequo' ? 'It\'s Ex Aequo!' : `${winner.charAt(0).toUpperCase() + winner.slice(1)} wins!`}</p>
+            <button id="reset-game">Start New Game</button>
+        `;
+    }
+
+    document.body.appendChild(gameOverElement);
     document.getElementById('reset-game').addEventListener('click', resetGame);
 }
 
 // Function to reset the game
 function resetGame() {
-    document.body.removeChild(document.getElementById('game-over'));
+    // Supprimer l'écran de game over
+    const gameOverElement = document.getElementById('game-over');
+    if (gameOverElement) {
+        gameOverElement.remove();
+    }
+
+    // Réinitialiser l'état du jeu
     setupInitialState();
     currentPlayer = PLAYER_BLACK;
     currentAction = null;
+    jumped = false;
+    selectedPiece = null;
+    possibleMoves = [];
+    moveHistory = [];
+
+    // Réinitialiser l'historique de l'IA si nécessaire
+    if (aiEnabled && gameHistory) {
+        gameHistory.startNewGame();
+    }
+
+    // Réactiver les contrôles
+    enableControls();
+    
+    // Mettre à jour tous les affichages
+    updateAllDisplays();
+
+    // Si l'IA est activée et que c'est son tour, déclencher son tour
+    if (aiEnabled && currentPlayer === PLAYER_BLACK) {
+        setTimeout(() => switchTurn(), 100);
+    }
 }
 
 function removeTile(row, col) {
@@ -1280,7 +1305,7 @@ async function startTraining() {
 
         // Configuration de l'entraînement
         const trainingConfig = {
-            gamesPerIteration: 2,
+            gamesPerIteration: 5,
             iterations: 1,
             maxTimePerMove: 1000
         };
@@ -1314,16 +1339,8 @@ async function startTraining() {
         trainButton.textContent = 'Train AI';
         trainButton.disabled = false;
 
-        // Afficher un game over spécial pour l'entraînement
-        const gameOverElement = document.createElement('div');
-        gameOverElement.id = 'game-over';
-        gameOverElement.innerHTML = `
-            <h2>Training Completed</h2>
-            <p>AI has completed ${trainingConfig.gamesPerIteration * trainingConfig.iterations} games</p>
-            <button id="reset-game">Start New Game</button>
-        `;
-        document.body.appendChild(gameOverElement);
-        document.getElementById('reset-game').addEventListener('click', resetGame);
+        // Utiliser displayGameOver pour afficher le message de fin d'entraînement
+        displayGameOver('training-completed');
 
     } catch (error) {
         console.error("\n❌ ERREUR PENDANT L'ENTRAÎNEMENT:", error);
@@ -1349,9 +1366,9 @@ async function playSelfPlayGame(maxTimePerMove) {
     
     // Créer une configuration MCTS spécifique pour l'entraînement
     const trainingMCTS = new HexaequoAI.MCTS(aiPlayer.neuralNetwork, {
-        maxSimulations: 50,    // Réduit de 200 à 50
-        maxTimeMs: 500,        // Réduit de 5000ms à 500ms
-        minSimulations: 10     // Réduit de 50 à 10
+        maxSimulations: 50,
+        maxTimeMs: 500,
+        minSimulations: 10
     });
     
     // Jouer jusqu'à la fin de la partie
@@ -1367,7 +1384,6 @@ async function playSelfPlayGame(maxTimePerMove) {
         
         try {
             console.log("Réflexion de l'IA...");
-            // Utiliser le MCTS configuré pour l'entraînement
             const alphaZeroState = aiPlayer.convertToAlphaZeroState(gameState);
             const action = await trainingMCTS.search(alphaZeroState);
             const move = aiPlayer.convertFromAlphaZeroAction(action);
