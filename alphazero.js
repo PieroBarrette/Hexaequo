@@ -294,7 +294,33 @@ HexaequoAI.HexaequoState = class {
 // Définition de la classe NeuralNetwork dans le namespace
 HexaequoAI.NeuralNetwork = class {
     constructor() {
-        this.initializeNetwork();
+        this.policyNetwork = null;
+        this.valueNetwork = null;
+        this.VERSION = {
+            MAJOR: 1,  // Change lors de modifications incompatibles
+            MINOR: 0,  // Change lors d'ajouts de fonctionnalités
+            PATCH: 0   // Change lors de corrections de bugs
+        };
+        // Ajouter les statistiques
+        this.stats = {
+            selfPlayGames: 0,
+            humanGames: 0,
+            lastUpdate: null
+        };
+        this.isTraining = false; // Verrou d'entraînement
+    }
+
+    getVersionString() {
+        return `${this.VERSION.MAJOR}.${this.VERSION.MINOR}.${this.VERSION.PATCH}`;
+    }
+
+    // Ajouter la fonction arraysEqual comme méthode de classe
+    arraysEqual(a, b) {
+        if (a.length !== b.length) return false;
+        for (let i = 0; i < a.length; i++) {
+            if (a[i] !== b[i]) return false;
+        }
+        return true;
     }
 
     async initializeNetwork() {
@@ -423,37 +449,49 @@ HexaequoAI.NeuralNetwork = class {
     }
 
     async trainStep(states, actionProbs, values) {
-        const batchSize = states.length;
-        const inputTensor = tf.tidy(() => {
-            // Convertir les états en tenseur
-            const stateTensors = states.map(state => this.preprocessState(state));
-            return tf.concat(stateTensors, 0);
-        });
+        if (this.isTraining) {
+            console.warn('Training already in progress, skipping this step');
+            return null;
+        }
 
-        const targetPolicyTensor = tf.tensor2d(actionProbs);
-        const targetValueTensor = tf.tensor2d(values, [batchSize, 1]);
+        try {
+            this.isTraining = true;
+            const batchSize = states.length;
+            const inputTensor = tf.tidy(() => {
+                const stateTensors = states.map(state => this.preprocessState(state));
+                return tf.concat(stateTensors, 0);
+            });
 
-        // Entraîner le réseau de politique
-        const policyHistory = await this.policyNetwork.fit(inputTensor, targetPolicyTensor, {
-            epochs: 1,
-            batchSize: 32,
-            verbose: 0
-        });
+            const targetPolicyTensor = tf.tensor2d(actionProbs);
+            const targetValueTensor = tf.tensor2d(values, [batchSize, 1]);
 
-        // Entraîner le réseau de valeur
-        const valueHistory = await this.valueNetwork.fit(inputTensor, targetValueTensor, {
-            epochs: 1,
-            batchSize: 32,
-            verbose: 0
-        });
+            // Entraîner le réseau de politique
+            const policyHistory = await this.policyNetwork.fit(inputTensor, targetPolicyTensor, {
+                epochs: 1,
+                batchSize: 32,
+                verbose: 0
+            });
 
-        // Libérer la mémoire
-        tf.dispose([inputTensor, targetPolicyTensor, targetValueTensor]);
+            // Entraîner le réseau de valeur
+            const valueHistory = await this.valueNetwork.fit(inputTensor, targetValueTensor, {
+                epochs: 1,
+                batchSize: 32,
+                verbose: 0
+            });
 
-        return {
-            policyLoss: policyHistory.history.loss[0],
-            valueLoss: valueHistory.history.loss[0]
-        };
+            // Libérer la mémoire
+            tf.dispose([inputTensor, targetPolicyTensor, targetValueTensor]);
+
+            return {
+                policyLoss: policyHistory.history.loss[0],
+                valueLoss: valueHistory.history.loss[0]
+            };
+        } catch (error) {
+            console.error('Error during training step:', error);
+            return null;
+        } finally {
+            this.isTraining = false;
+        }
     }
 
     async saveModel() {
@@ -476,6 +514,194 @@ HexaequoAI.NeuralNetwork = class {
             console.error('Error loading model:', error);
             return false;
         }
+    }
+
+    async getWeights() {
+        try {
+            console.log('Getting network weights...');
+            const policyWeights = this.policyNetwork.getWeights();
+            const valueWeights = this.valueNetwork.getWeights();
+            return [...policyWeights, ...valueWeights];
+        } catch (error) {
+            console.error('Error getting weights:', error);
+            throw error;
+        }
+    }
+
+    async setWeights(weights) {
+        try {
+            console.log('Setting network weights...');
+            const policyWeightCount = this.policyNetwork.getWeights().length;
+            console.log(`Policy network expects ${policyWeightCount} weight tensors`);
+            
+            const policyWeights = weights.slice(0, policyWeightCount);
+            const valueWeights = weights.slice(policyWeightCount);
+            
+            // Vérifier la compatibilité des formes avant de définir les poids
+            const policyShapes = this.policyNetwork.getWeights().map(w => w.shape);
+            const valueShapes = this.valueNetwork.getWeights().map(w => w.shape);
+            
+            policyWeights.forEach((w, i) => {
+                if (!this.arraysEqual(w.shape, policyShapes[i])) {
+                    throw new Error(`Policy network shape mismatch at layer ${i}: expected ${policyShapes[i]}, got ${w.shape}`);
+                }
+            });
+            
+            valueWeights.forEach((w, i) => {
+                if (!this.arraysEqual(w.shape, valueShapes[i])) {
+                    throw new Error(`Value network shape mismatch at layer ${i}: expected ${valueShapes[i]}, got ${w.shape}`);
+                }
+            });
+            
+            this.policyNetwork.setWeights(policyWeights);
+            this.valueNetwork.setWeights(valueWeights);
+            console.log('✅ Weights set successfully');
+        } catch (error) {
+            console.error('Error setting weights:', error);
+            throw error;
+        }
+    }
+
+    async saveNetwork(filename = 'hexaequo-network.json') {
+        try {
+            console.log('Saving network...');
+            const weights = await this.getWeights();
+            
+            const serializedWeights = await Promise.all(
+                weights.map(async w => ({
+                    shape: w.shape,
+                    data: Array.from(await w.data()).map(n => Math.round(n * 10000) / 10000)
+                }))
+            );
+
+            const saveData = {
+                v: this.getVersionString(),
+                d: new Date().toISOString().split('T')[0],
+                w: serializedWeights,
+                metadata: {
+                    architecture: {
+                        policy: this.policyNetwork.layers.map(l => l.getConfig()),
+                        value: this.valueNetwork.layers.map(l => l.getConfig())
+                    },
+                    training: {
+                        lastUpdate: this.stats.lastUpdate,
+                        selfPlayGames: this.stats.selfPlayGames,
+                        humanGames: this.stats.humanGames
+                    }
+                }
+            };
+
+            // Compression supplémentaire : convertir les nombres en chaînes plus courtes
+            const compressedData = JSON.stringify(saveData, (key, value) => {
+                if (typeof value === 'number') {
+                    // Convertir les petits nombres en notation scientifique si plus efficace
+                    if (Math.abs(value) < 0.0001 || Math.abs(value) >= 10000) {
+                        return value.toExponential(4);
+                    }
+                    return Number(value.toFixed(4));
+                }
+                return value;
+            });
+
+            // Créer et télécharger le fichier
+            const blob = new Blob([compressedData], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+
+            console.log('Network saved successfully');
+            return true;
+        } catch (error) {
+            console.error('Error saving network:', error);
+            return false;
+        }
+    }
+
+    async loadNetwork(file) {
+        try {
+            const saveData = JSON.parse(await file.text());
+            
+            // Charger les statistiques si elles existent
+            if (saveData.metadata?.training) {
+                this.stats = {
+                    selfPlayGames: saveData.metadata.training.selfPlayGames || 0,
+                    humanGames: saveData.metadata.training.humanGames || 0,
+                    lastUpdate: saveData.metadata.training.lastUpdate || null
+                };
+                console.log('Network statistics loaded:');
+                console.log('- Self-play games:', this.stats.selfPlayGames);
+                console.log('- Human games:', this.stats.humanGames);
+                console.log('- Last update:', this.stats.lastUpdate);
+            }
+
+            const version = saveData.v || saveData.version;
+            
+            // Vérifier la compatibilité des versions
+            const [major, minor] = version.split('.').map(Number);
+            if (major !== this.VERSION.MAJOR) {
+                throw new Error(`Incompatible network version: ${version}. Current version: ${this.getVersionString()}`);
+            }
+            
+            if (minor > this.VERSION.MINOR) {
+                console.warn(`Loading newer minor version (${version}) with current version ${this.getVersionString()}`);
+            }
+
+            // Convertir les données compressées en tenseurs
+            console.log('🧮 Converting weights to tensors...');
+            const weights = (saveData.w || saveData.weights).map((w, i) => {
+                console.log(`Layer ${i + 1}: Shape [${w.shape.join(', ')}]`);
+                // Convertir explicitement les données en nombres flottants
+                const floatData = w.data.map(val => {
+                    // Gérer les notations scientifiques et les chaînes de caractères
+                    if (typeof val === 'string') {
+                        return parseFloat(val);
+                    }
+                    return val;
+                });
+                console.log(`  Sample values: [${floatData.slice(0, 3).join(', ')}...]`);
+                return tf.tensor(floatData, w.shape, 'float32');
+            });
+            
+            console.log('⚙️ Setting network weights...');
+            try {
+                await this.setWeights(weights);
+                // Vérifier que les poids ont été correctement chargés
+                const layerCount = this.policyNetwork.layers.length + this.valueNetwork.layers.length;
+                console.log(`✅ Network loaded successfully (${layerCount} layers)`);
+                
+                // Libérer la mémoire des tenseurs temporaires
+                weights.forEach(tensor => tensor.dispose());
+                return true;
+            } catch (error) {
+                // Libérer la mémoire en cas d'erreur
+                weights.forEach(tensor => tensor.dispose());
+                throw error;
+            }
+        } catch (error) {
+            console.error('❌ Error loading network:', error);
+            throw new Error(`Failed to load network: ${error.message}`);
+        }
+    }
+
+    incrementSelfPlayGames() {
+        this.stats.selfPlayGames++;
+        this.stats.lastUpdate = new Date().toISOString();
+    }
+
+    incrementHumanGames() {
+        this.stats.humanGames++;
+        this.stats.lastUpdate = new Date().toISOString();
+    }
+
+    // Ajoutons une méthode pour vérifier l'état de l'entraînement
+    isCurrentlyTraining() {
+        return this.isTraining;
     }
 };
 
@@ -986,6 +1212,7 @@ HexaequoAI.GameHistory = class {
     }
 
     startNewGame() {
+        console.log('Starting new game for training...');
         this.currentGame = {
             states: [],
             actions: [],
@@ -994,7 +1221,8 @@ HexaequoAI.GameHistory = class {
     }
 
     addMove(state, action) {
-        if (this.currentGame) {
+        if (this.currentGame && action) {  // Vérifier que action existe
+            console.log('Recording move:', action);
             this.currentGame.states.push(JSON.stringify(state));
             this.currentGame.actions.push(action);
         }
@@ -1002,6 +1230,7 @@ HexaequoAI.GameHistory = class {
 
     endGame(winner) {
         if (this.currentGame) {
+            console.log('Ending game with winner:', winner);
             this.currentGame.winner = winner;
             this.games.push(this.currentGame);
             this.currentGame = null;
@@ -1009,30 +1238,85 @@ HexaequoAI.GameHistory = class {
     }
 
     async trainNetwork(neuralNetwork) {
+        if (neuralNetwork.isCurrentlyTraining()) {
+            console.warn('Network is currently training, skipping this training session');
+            return;
+        }
+
         console.log('Starting training on', this.games.length, 'games');
         
         for (const game of this.games) {
+            if (neuralNetwork.isCurrentlyTraining()) {
+                console.warn('Training interrupted due to concurrent training session');
+                break;
+            }
+
             const states = game.states.map(s => JSON.parse(s));
             const finalReward = game.winner === HexaequoAI.PLAYER_BLACK ? 1 : -1;
             
             for (let i = 0; i < states.length; i++) {
+                if (neuralNetwork.isCurrentlyTraining()) break;
+
                 const state = states[i];
                 const action = game.actions[i];
                 
-                // Calculer la valeur cible (reward discounté)
+                if (!action) {
+                    console.warn('Skipping undefined action at index', i);
+                    continue;
+                }
+                
                 const targetValue = finalReward * Math.pow(0.95, states.length - i - 1);
-                
-                // Créer le vecteur de politique cible
                 const policyTarget = new Array(900).fill(0);
-                const actionIndex = HexaequoAI.MCTS.prototype.actionToIndex(action);
-                policyTarget[actionIndex] = 1;
+                const actionIndex = this.actionToIndex(action);
+                if (actionIndex !== null) {
+                    policyTarget[actionIndex] = 1;
+                }
                 
-                // Entraîner le réseau
-                await neuralNetwork.trainStep([state], [policyTarget], [[targetValue]]);
+                const result = await neuralNetwork.trainStep([state], [policyTarget], [[targetValue]]);
+                if (!result) {
+                    console.warn('Training step failed, skipping remaining steps');
+                    break;
+                }
             }
         }
         
         console.log('Training completed');
+    }
+
+    actionToIndex(action) {
+        if (!action || !action.type) {
+            console.warn('Invalid action:', action);
+            return null;
+        }
+
+        try {
+            let base = 0;
+            switch (action.type) {
+                case 'place-tile':
+                    base = 0;
+                    return base + action.row * 10 + action.col;
+                case 'place-disc':
+                    base = 100;
+                    return base + action.row * 10 + action.col;
+                case 'place-ring':
+                    base = 200;
+                    return base + action.row * 10 + action.col;
+                case 'move':
+                    base = 300;
+                    if (!action.from || !action.to) {
+                        console.warn('Invalid move action:', action);
+                        return null;
+                    }
+                    return base + action.from.row * 100 + action.from.col * 10 + 
+                           action.to.row * 10 + action.to.col;
+                default:
+                    console.warn('Unknown action type:', action.type);
+                    return null;
+            }
+        } catch (error) {
+            console.error('Error in actionToIndex:', error);
+            return null;
+        }
     }
 };
 

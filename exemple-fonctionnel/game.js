@@ -14,6 +14,10 @@ let editorMode = false;
 let selectedEditorPiece = null;
 let aiPlayer = null;
 let aiEnabled = false;
+let gameHistory = null;
+let lastMove = null;  // Pour stocker le dernier coup joué
+let moveHistory = [];  // Pour stocker l'historique des mouvements
+const MAX_REPETITIONS = 3;  // Nombre maximum de répétitions autorisées
 
 class AIController {
     constructor() {
@@ -134,6 +138,9 @@ function initializeBoard() {
 
 // Function to set up the initial game state
 function setupInitialState() {
+    // Réinitialiser l'historique des mouvements
+    moveHistory = [];
+    
     // Clear the board
     for (let row = 0; row < BOARD_SIZE; row++) {
         for (let col = 0; col < BOARD_SIZE; col++) {
@@ -242,7 +249,7 @@ function toggleMode() {
 }
 
 // Function to handle board clicks
-function handleBoardClick(event) {
+async function handleBoardClick(event) {
     if (editorMode) {
         handleEditorBoardClick(event);
         return;
@@ -254,50 +261,50 @@ function handleBoardClick(event) {
     const row = parseInt(hex.dataset.row);
     const col = parseInt(hex.dataset.col);
 
-    // Handle different actions based on the current action
-    if (currentAction === 'place-tile') {
-        if (canPlaceTile(row, col)) {
-            placeTile(row, col, currentPlayer);
-            endTurn();
-        }
-    } else if (currentAction === 'place-disc') {
-        if (canPlacePiece(row, col) && inventory[currentPlayer].discs > 0) {
-            placePiece(row, col, 'disc', currentPlayer);
-            endTurn();
-        }
-    } else if (currentAction === 'place-ring') {
-        if (canPlacePiece(row, col) && inventory[currentPlayer].rings > 0 && inventory[currentPlayer].capturedDiscs > 0) {
-            placePiece(row, col, 'ring', currentPlayer);
-            endTurn();
-        }
-    } else if (currentAction === 'move-piece') {
-        if (selectedPiece) {
-            if (possibleMoves.some(move => move.row === row && move.col === col)) {
-                movePiece(selectedPiece, row, col);
-                if (!jumped){
+    try {
+        switch (currentAction) {
+            case 'place-tile':
+                if (canPlaceTile(row, col)) {
+                    await placeTile(row, col, currentPlayer);
+                    lastMove = { type: 'place-tile', row, col };
                     endTurn();
-                } else {
-                    selectedPiece = { row, col };
-                    possibleMoves = getLegalMoves(row, col);
-                    if (possibleMoves.length > 0) {
-                        highlightPossibleMoves(possibleMoves); // Highlight legal moves
-                    } else {
+                }
+                break;
+            case 'place-disc':
+                if (canPlacePiece(row, col)) {
+                    await placePiece(row, col, 'disc', currentPlayer);
+                    lastMove = { type: 'place-disc', row, col };
+                    endTurn();
+                }
+                break;
+            case 'place-ring':
+                if (canPlacePiece(row, col)) {
+                    await placePiece(row, col, 'ring', currentPlayer);
+                    lastMove = { type: 'place-ring', row, col };
+                    endTurn();
+                }
+                break;
+            case 'move-piece':
+                if (selectedPiece) {
+                    const moves = getLegalMoves(selectedPiece.row, selectedPiece.col);
+                    if (moves.some(m => m.row === row && m.col === col)) {
+                        await movePiece(selectedPiece, row, col);
+                        lastMove = { 
+                            type: 'move', 
+                            from: { row: selectedPiece.row, col: selectedPiece.col },
+                            to: { row, col }
+                        };
                         endTurn();
                     }
+                    clearSelection();
+                } else if (board[row][col].piece?.color === currentPlayer) {
+                    selectPiece(row, col);
                 }
-            } else {
-            }
-        } else {
-            const piece = board[row][col].piece;
-            if (piece && piece.color === currentPlayer) {
-                selectedPiece = { row, col };
-                possibleMoves = getLegalMoves(row, col);
-                highlightPossibleMoves(possibleMoves); // Highlight legal moves
-            } else {
-            }
+                break;
         }
+    } catch (error) {
+        console.error('Error handling board click:', error);
     }
-    updateAllDisplays();
 }
 
 // Function to handle clicks in editor mode
@@ -539,8 +546,25 @@ function clearSelection() {
 
 // Function to move a piece on the board
 function movePiece(from, toRow, toCol) {
+    // Vérifier si le mouvement crée une répétition excessive
+    if (!checkMoveRepetition(from.row, from.col, toRow, toCol)) {
+        console.log("Ce mouvement créerait trop de répétitions !");
+        return false;
+    }
+
     const piece = board[from.row][from.col].piece;
     board[from.row][from.col].piece = null;
+
+    // Enregistrer le mouvement dans l'historique
+    moveHistory.push({
+        from: { row: from.row, col: from.col },
+        to: { row: toRow, col: toCol }
+    });
+
+    // Limiter la taille de l'historique pour éviter une utilisation excessive de mémoire
+    if (moveHistory.length > 100) {
+        moveHistory.shift();
+    }
 
     // Check if the move is a jump for discs
     jumped = false;
@@ -570,10 +594,22 @@ function movePiece(from, toRow, toCol) {
     pieceElement.className = `piece ${piece.color} ${piece.type}`;
     board[toRow][toCol].element.innerHTML = '';
     board[toRow][toCol].element.appendChild(pieceElement);
+    return true;
 }
 
 // Function to switch turns between players
 async function switchTurn() {
+    // Enregistrer l'état avant le changement de joueur
+    if (aiEnabled && gameHistory) {
+        const gameState = {
+            board: board,
+            inventory: inventory,
+            currentPlayer: currentPlayer
+        };
+        // Enregistrer le dernier coup joué
+        gameHistory.addMove(gameState, lastMove);
+    }
+    
     currentPlayer = currentPlayer === PLAYER_WHITE ? PLAYER_BLACK : PLAYER_WHITE;
     
     // Si c'est le tour de l'IA
@@ -615,7 +651,7 @@ function enableControls() {
 
 async function executeAIMove(move) {
     try {
-        // Simuler le clic sur le type d'action approprié
+        lastMove = move;  // Enregistrer le coup
         switch (move.type) {
             case HexaequoAI.ACTION_TYPES.PLACE_TILE:
                 if (!canPlaceTile(move.row, move.col)) {
@@ -790,7 +826,31 @@ function hasMovablePieces() {
 function checkGameOver() {
     if (isGameOver()) {
         const winner = determineWinner();
-        displayGameOver(winner);
+        
+        // Enregistrer la fin de partie et entraîner le réseau
+        if (aiEnabled && gameHistory) {
+            gameHistory.endGame(winner);
+            if (aiPlayer && aiPlayer.neuralNetwork) {
+                aiPlayer.neuralNetwork.incrementHumanGames();
+                
+                gameHistory.trainNetwork(aiPlayer.neuralNetwork)
+                    .then(() => console.log('Network trained on human game'))
+                    .catch(err => console.error('Failed to train on human game:', err));
+            }
+        }
+        
+        // Vérifier si nous sommes en mode entraînement automatique
+        const isAutoTraining = aiPlayer?.neuralNetwork?.isTraining || 
+                             document.getElementById('start-training')?.disabled;
+        
+        // Afficher le game over sauf pendant l'entraînement automatique
+        if (!isAutoTraining) {
+            console.log('Displaying game over screen. Winner:', winner);
+            displayGameOver(winner);
+        } else {
+            console.log('Skipping game over display during auto-training');
+        }
+        
         return true;
     }
     return false;
@@ -862,6 +922,12 @@ function determineWinner() {
 
 // Function to display the game over screen
 function displayGameOver(winner) {
+    // Supprimer l'ancien game over s'il existe
+    const existingGameOver = document.getElementById('game-over');
+    if (existingGameOver) {
+        existingGameOver.remove();
+    }
+
     const gameOverElement = document.createElement('div');
     gameOverElement.id = 'game-over';
     gameOverElement.innerHTML = `
@@ -933,9 +999,22 @@ function setupEventListeners() {
     document.getElementById('toggle-notation').addEventListener('click', toggleNotation);
     document.getElementById('toggle-mode').addEventListener('click', toggleMode);
     document.getElementById('toggle-ai').addEventListener('click', toggleAI);
+    
+    const trainButton = document.getElementById('start-training');
+    if (trainButton) {
+        console.log('Setting up training button listener');
+        trainButton.addEventListener('click', () => {
+            console.log('Training button clicked');
+            startTraining();
+        });
+    } else {
+        console.error('Training button not found in DOM');
+    }
+
     document.querySelectorAll('.editor-button').forEach(button => {
         button.addEventListener('click', handleEditorButtonClick);
     });
+    
     document.getElementById('place-tile').addEventListener('click', () => setCurrentAction('place-tile'));
     document.getElementById('place-disc').addEventListener('click', () => setCurrentAction('place-disc'));
     document.getElementById('place-ring').addEventListener('click', () => setCurrentAction('place-ring'));
@@ -1039,6 +1118,9 @@ function updateAllDisplays() {
     updateCurrentPlayerDisplay();
     updateActionButtons();
     updateAIStatus();
+    if (aiEnabled) {
+        displayNetworkStats();
+    }
 }
 
 function updateAIStatus() {
@@ -1142,6 +1224,10 @@ async function toggleAI() {
                 console.log('AI player initialized');
             }
             
+            // Initialiser l'historique de la partie
+            gameHistory = new HexaequoAI.GameHistory();
+            gameHistory.startNewGame();
+            
             aiEnabled = true;
             aiButton.textContent = 'Play vs Human';
             aiButton.classList.add('active');
@@ -1163,4 +1249,348 @@ async function toggleAI() {
         }
         aiEnabled = false;
     }
+}
+
+async function startTraining() {
+    console.log("=== DÉBUT DE L'ENTRAÎNEMENT ===");
+    
+    try {
+        const trainButton = document.getElementById('start-training');
+        if (!trainButton) {
+            throw new Error("Bouton d'entraînement non trouvé");
+        }
+        
+        console.log("Désactivation du bouton d'entraînement...");
+        trainButton.disabled = true;
+        trainButton.textContent = 'Training in progress...';
+
+        // Supprimer tout game over existant au début de l'entraînement
+        const existingGameOver = document.getElementById('game-over');
+        if (existingGameOver) {
+            existingGameOver.remove();
+        }
+
+        // Vérifier/Initialiser l'IA
+        if (!aiPlayer) {
+            console.log("Création d'une nouvelle instance d'IA...");
+            aiPlayer = new AIController();
+            console.log("Initialisation de l'IA...");
+            await aiPlayer.initialize();
+        }
+
+        // Configuration de l'entraînement
+        const trainingConfig = {
+            gamesPerIteration: 2,
+            iterations: 1,
+            maxTimePerMove: 1000
+        };
+
+        console.log("Configuration de l'entraînement:", trainingConfig);
+
+        // Créer ou mettre à jour l'élément de statut
+        let statusElement = document.getElementById('training-status');
+        if (!statusElement) {
+            statusElement = document.createElement('div');
+            statusElement.id = 'training-status';
+            document.getElementById('player-info').appendChild(statusElement);
+        }
+
+        // Boucle d'entraînement
+        for (let i = 0; i < trainingConfig.iterations; i++) {
+            console.log(`\nItération ${i + 1}/${trainingConfig.iterations}`);
+            statusElement.textContent = `Iteration ${i + 1}/${trainingConfig.iterations}`;
+            
+            for (let g = 0; g < trainingConfig.gamesPerIteration; g++) {
+                console.log(`\nPartie ${g + 1}/${trainingConfig.gamesPerIteration}`);
+                statusElement.textContent += ` - Game ${g + 1}`;
+                
+                const winner = await playSelfPlayGame(trainingConfig.maxTimePerMove);
+                console.log(`Partie terminée. Gagnant: ${winner}`);
+            }
+        }
+
+        console.log("\n=== ENTRAÎNEMENT TERMINÉ ===");
+        statusElement.textContent = 'Training completed!';
+        trainButton.textContent = 'Train AI';
+        trainButton.disabled = false;
+
+        // Afficher un game over spécial pour l'entraînement
+        const gameOverElement = document.createElement('div');
+        gameOverElement.id = 'game-over';
+        gameOverElement.innerHTML = `
+            <h2>Training Completed</h2>
+            <p>AI has completed ${trainingConfig.gamesPerIteration * trainingConfig.iterations} games</p>
+            <button id="reset-game">Start New Game</button>
+        `;
+        document.body.appendChild(gameOverElement);
+        document.getElementById('reset-game').addEventListener('click', resetGame);
+
+    } catch (error) {
+        console.error("\n❌ ERREUR PENDANT L'ENTRAÎNEMENT:", error);
+        const trainButton = document.getElementById('start-training');
+        if (trainButton) {
+            trainButton.textContent = 'Train AI (Error)';
+            trainButton.disabled = false;
+        }
+        
+        const statusElement = document.getElementById('training-status');
+        if (statusElement) {
+            statusElement.textContent = `Training failed: ${error.message}`;
+        }
+    }
+}
+
+async function playSelfPlayGame(maxTimePerMove) {
+    console.log("🎮 Démarrage d'une nouvelle partie d'auto-apprentissage");
+    
+    // Réinitialiser le jeu
+    setupInitialState();
+    let moveCount = 0;
+    
+    // Créer une configuration MCTS spécifique pour l'entraînement
+    const trainingMCTS = new HexaequoAI.MCTS(aiPlayer.neuralNetwork, {
+        maxSimulations: 50,    // Réduit de 200 à 50
+        maxTimeMs: 500,        // Réduit de 5000ms à 500ms
+        minSimulations: 10     // Réduit de 50 à 10
+    });
+    
+    // Jouer jusqu'à la fin de la partie
+    while (!isGameOver()) {
+        moveCount++;
+        console.log(`\nCoup ${moveCount} - Tour de ${currentPlayer}`);
+        
+        const gameState = {
+            board: board,
+            inventory: inventory,
+            currentPlayer: currentPlayer
+        };
+        
+        try {
+            console.log("Réflexion de l'IA...");
+            // Utiliser le MCTS configuré pour l'entraînement
+            const alphaZeroState = aiPlayer.convertToAlphaZeroState(gameState);
+            const action = await trainingMCTS.search(alphaZeroState);
+            const move = aiPlayer.convertFromAlphaZeroAction(action);
+            
+            console.log("Coup choisi:", move);
+            await executeAIMove(move);
+            console.log("Coup exécuté");
+            
+        } catch (error) {
+            console.error("❌ Erreur pendant le coup:", error);
+            break;
+        }
+    }
+
+    const winner = determineWinner();
+    console.log(`\n🏆 Partie terminée en ${moveCount} coups. Gagnant: ${winner}`);
+    
+    if (aiPlayer && aiPlayer.neuralNetwork) {
+        aiPlayer.neuralNetwork.incrementSelfPlayGames();
+    }
+    
+    return winner;
+}
+
+window.addEventListener('load', () => {
+    console.log('Page loaded, checking training button...');
+    const trainButton = document.getElementById('start-training');
+    if (trainButton) {
+        console.log('Training button found');
+        trainButton.addEventListener('click', () => {
+            console.log('Training button clicked');
+            startTraining();
+        });
+    } else {
+        console.error('Training button not found after page load');
+    }
+});
+
+function initializeAIControls() {
+    console.log('Initializing AI controls...');
+    const aiControls = document.getElementById('ai-controls');
+    if (!aiControls) {
+        console.error('AI controls container not found');
+        return;
+    }
+
+    // Bouton de chargement
+    const loadButton = document.getElementById('load-network');
+    if (loadButton) {
+        console.log('Load button found, attaching listener...');
+        loadButton.onclick = () => {
+            console.log('📂 Load Network button clicked');
+            const input = document.createElement('input');
+            input.type = 'file';
+            input.accept = '.json';
+            
+            input.onchange = async (e) => {
+                const file = e.target.files[0];
+                if (!file) return;
+                
+                try {
+                    if (!aiPlayer) {
+                        aiPlayer = new AIController();
+                        await aiPlayer.initialize();
+                    }
+                    
+                    loadButton.textContent = 'Loading...';
+                    loadButton.disabled = true;
+                    
+                    await aiPlayer.neuralNetwork.loadNetwork(file);
+                    console.log('Network statistics:');
+                    console.log('- Self-play games:', aiPlayer.neuralNetwork.stats.selfPlayGames);
+                    console.log('- Human games:', aiPlayer.neuralNetwork.stats.humanGames);
+                    
+                    displayNetworkStats();
+                    
+                    loadButton.textContent = 'Network Loaded!';
+                    setTimeout(() => {
+                        loadButton.textContent = 'Load Network';
+                        loadButton.disabled = false;
+                    }, 2000);
+                    
+                } catch (error) {
+                    console.error('Error loading network:', error);
+                    loadButton.textContent = 'Load Failed';
+                    setTimeout(() => {
+                        loadButton.textContent = 'Load Network';
+                        loadButton.disabled = false;
+                    }, 2000);
+                }
+            };
+            input.click();
+        };
+    }
+
+    // Bouton de sauvegarde
+    const saveButton = document.getElementById('save-network');
+    if (saveButton) {
+        console.log('Save button found, attaching listener...');
+        saveButton.onclick = async () => {
+            console.log('Save button clicked');
+            if (aiPlayer && aiPlayer.neuralNetwork) {
+                console.log('Calling saveNetwork on neural network...');
+                await aiPlayer.neuralNetwork.saveNetwork();
+            } else {
+                console.error('AI player or neural network not initialized');
+            }
+        };
+    } else {
+        console.error('Save button not found');
+    }
+}
+
+// Ajouter cet appel au chargement de la page
+window.addEventListener('load', () => {
+    console.log('Page loaded, initializing AI controls...');
+    initializeAIControls();
+});
+
+// Ajouter cette fonction après la fonction handleBoardClick
+function selectPiece(row, col) {
+    // Nettoyer la sélection précédente
+    clearSelection();
+    
+    // Sélectionner la nouvelle pièce
+    selectedPiece = { row, col };
+    
+    // Obtenir et afficher les mouvements possibles
+    const possibleMoves = getLegalMoves(row, col);
+    console.log('Highlighting possible moves:', possibleMoves);
+    
+    // Mettre en surbrillance les mouvements possibles
+    possibleMoves.forEach(move => {
+        board[move.row][move.col].highlight = true;
+        const highlightElement = document.createElement('div');
+        highlightElement.className = 'highlight-indicator';
+        board[move.row][move.col].element.appendChild(highlightElement);
+        console.log(`Highlighted move at: (${move.row}, ${move.col})`);
+    });
+}
+
+// Ajouter cette fonction si elle n'existe pas déjà
+function clearSelection() {
+    selectedPiece = null;
+    // Supprimer toutes les surbrillances
+    for (let row = 0; row < BOARD_SIZE; row++) {
+        for (let col = 0; col < BOARD_SIZE; col++) {
+            board[row][col].highlight = false;
+            const highlightElement = board[row][col].element.querySelector('.highlight-indicator');
+            if (highlightElement) {
+                highlightElement.remove();
+            }
+        }
+    }
+}
+
+// Ajouter une fonction pour afficher les statistiques
+function displayNetworkStats() {
+    if (!aiPlayer || !aiPlayer.neuralNetwork) return;
+
+    const stats = aiPlayer.neuralNetwork.stats;
+    let statsElement = document.getElementById('network-stats');
+    
+    // Si l'élément n'existe pas, le créer
+    if (!statsElement) {
+        statsElement = document.createElement('div');
+        statsElement.id = 'network-stats';
+        document.getElementById('ai-controls').appendChild(statsElement);
+    }
+
+    const lastUpdate = stats.lastUpdate ? 
+        new Date(stats.lastUpdate).toLocaleDateString() : 'Never';
+
+    statsElement.innerHTML = `
+        <div>Network Stats:</div>
+        <div>Self-play games: ${stats.selfPlayGames}</div>
+        <div>Human games: ${stats.humanGames}</div>
+        <div>Last update: ${lastUpdate}</div>
+    `;
+}
+
+// Ajouter cette fonction pour vérifier les répétitions
+function checkMoveRepetition(fromRow, fromCol, toRow, toCol) {
+    // Créer une représentation du mouvement
+    const currentMove = {
+        from: { row: fromRow, col: fromCol },
+        to: { row: toRow, col: toCol }
+    };
+
+    // Vérifier si ce mouvement est un retour
+    if (moveHistory.length >= 2) {
+        const lastMove = moveHistory[moveHistory.length - 1];
+        if (lastMove.from.row === currentMove.to.row &&
+            lastMove.from.col === currentMove.to.col &&
+            lastMove.to.row === currentMove.from.row &&
+            lastMove.to.col === currentMove.from.col) {
+            
+            // Compter le nombre de répétitions de cette séquence
+            let repetitions = 0;
+            for (let i = 0; i < moveHistory.length - 1; i += 2) {
+                if (i + 1 >= moveHistory.length) break;
+                
+                const move1 = moveHistory[i];
+                const move2 = moveHistory[i + 1];
+                
+                if (move1.from.row === currentMove.from.row &&
+                    move1.from.col === currentMove.from.col &&
+                    move1.to.row === currentMove.to.row &&
+                    move1.to.col === currentMove.to.col &&
+                    move2.from.row === lastMove.from.row &&
+                    move2.from.col === lastMove.from.col &&
+                    move2.to.row === lastMove.to.row &&
+                    move2.to.col === lastMove.to.col) {
+                    repetitions++;
+                }
+            }
+
+            // Si on a déjà atteint le maximum de répétitions
+            if (repetitions >= MAX_REPETITIONS) {
+                return false;
+            }
+        }
+    }
+
+    return true;
 }

@@ -313,3 +313,35 @@ button.selected-action {
     background-color: #45a049;
 }
 
+#load-network, #save-network {
+    background-color: #2196F3;
+    color: white;
+    padding: 10px 20px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    margin: 5px;
+}
+
+#load-network:hover, #save-network:hover {
+    background-color: #1976D2;
+}
+
+#load-network:disabled, #save-network:disabled {
+    background-color: #cccccc;
+    cursor: not-allowed;
+}
+
+#network-stats {
+    margin-top: 10px;
+    padding: 10px;
+    background-color: #333;
+    color: #fff;
+    border-radius: 4px;
+    font-size: 0.9em;
+}
+
+#network-stats div {
+    margin: 2px 0;
+}
+
