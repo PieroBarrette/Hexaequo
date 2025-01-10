@@ -1062,6 +1062,147 @@ function switchTurn() {
     }
 } 
 
+class TrainingStorage {
+    constructor(selfPlay) {
+        this.selfPlay = selfPlay;
+    }
+
+    async exportToFile(isAutoSave = false) {
+        try {
+            // Ne sauvegarder que les poids du réseau et quelques métriques essentielles
+            const data = {
+                // Métriques de base pour le suivi
+                metrics: {
+                    totalGames: this.selfPlay.metrics.totalGames,
+                    winRates: this.selfPlay.metrics.winRates
+                },
+                // Les poids du réseau (c'est le plus important)
+                networkWeights: await this.compressNetworkWeights()
+            };
+
+            if (isAutoSave) {
+                try {
+                    const timestamp = new Date().toISOString();
+                    localStorage.setItem('hexaequo-autosave', JSON.stringify({
+                        timestamp,
+                        data
+                    }));
+                    
+                    const saveStatus = document.getElementById('auto-save-status');
+                    if (saveStatus) {
+                        saveStatus.textContent = `Dernière sauvegarde automatique: ${new Date().toLocaleTimeString()}`;
+                    }
+                    
+                    console.log(`Sauvegarde automatique dans le localStorage: ${timestamp}`);
+                    return true;
+                } catch (e) {
+                    if (e.name === 'QuotaExceededError') {
+                        return this.saveToFile(data, true);
+                    }
+                    throw e;
+                }
+            } else {
+                return this.saveToFile(data, false);
+            }
+        } catch (error) {
+            console.error("Erreur lors de la sauvegarde:", error);
+            throw new Error("Échec de la sauvegarde: " + error.message);
+        }
+    }
+
+    async saveToFile(data, isAutoSave) {
+        const blob = new Blob([JSON.stringify(data)], { type: 'application/json' });
+        const filename = isAutoSave ? 
+            `hexaequo-autosave-${new Date().toISOString().replace(/[:.]/g, '-')}.json` :
+            `hexaequo-training-${new Date().toISOString()}.json`;
+
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(a.href);
+        return true;
+    }
+
+    async importFromFile(file) {
+        try {
+            const text = await file.text();
+            const data = JSON.parse(text);
+
+            // Restaurer l'historique des parties
+            this.selfPlay.gameHistory = data.gameHistory || [];
+
+            // Restaurer les métriques
+            if (data.metrics) {
+                Object.assign(this.selfPlay.metrics, data.metrics);
+            }
+
+            // Restaurer les poids du réseau
+            if (data.networkWeights) {
+                await this.importNetworkWeights(data.networkWeights);
+            }
+
+            console.log("Progression chargée avec succès");
+            return true;
+        } catch (error) {
+            console.error("Erreur lors du chargement:", error);
+            throw new Error("Échec du chargement: " + error.message);
+        }
+    }
+
+    async compressNetworkWeights() {
+        // Exporter les poids du réseau de politique
+        const policyWeights = await Promise.all(
+            this.selfPlay.neuralNetwork.policyNetwork.getWeights().map(async w => {
+                const array = await w.array();
+                // Arrondir les valeurs à 4 décimales pour réduire la taille
+                return this.compressArray(array);
+            })
+        );
+
+        // Exporter les poids du réseau de valeur
+        const valueWeights = await Promise.all(
+            this.selfPlay.neuralNetwork.valueNetwork.getWeights().map(async w => {
+                const array = await w.array();
+                return this.compressArray(array);
+            })
+        );
+
+        return {
+            policyWeights,
+            valueWeights
+        };
+    }
+
+    compressArray(array) {
+        if (Array.isArray(array)) {
+            return array.map(item => this.compressArray(item));
+        }
+        // Arrondir les nombres à 4 décimales
+        return Number(Number(array).toFixed(4));
+    }
+
+    // Lors du chargement, reconstruire les données complètes
+    async importData(data) {
+        // Décompresser l'historique avant de le restaurer
+        this.selfPlay.gameHistory = this.selfPlay.decompressHistory(data.gameHistory || []);
+
+        // Restaurer les métriques de base
+        if (data.metrics) {
+            this.selfPlay.metrics.totalGames = data.metrics.totalGames || 0;
+            this.selfPlay.metrics.winRates = data.metrics.winRates || { white: 0, black: 0, draw: 0 };
+            this.selfPlay.metrics.captureRates = data.metrics.captureRates || { discs: 0, rings: 0 };
+        }
+
+        // Restaurer les poids du réseau
+        if (data.networkWeights) {
+            await this.importNetworkWeights(data.networkWeights);
+        }
+    }
+}
+
 class SelfPlay {
     constructor(numGames = 1000) {
         this.numGames = numGames;
@@ -1072,6 +1213,16 @@ class SelfPlay {
         this.temperature = 1.0;  // Temperature parameter for action selection
         this.temperatureThreshold = 30;  // Number of moves before reducing temperature
         this.continuousTraining = false;  // Add this line
+        
+        // Paramètres pour la rotation des données
+        this.maxHistorySize = 100; // Garder seulement les 100 dernières parties
+        this.rotationStrategy = 'fifo'; // 'fifo' ou 'quality'
+        this.gameQualityThreshold = 0.6; // Seuil de qualité pour conserver une partie
+        this.storage = new TrainingStorage(this);
+        
+        // Paramètres de sauvegarde automatique
+        this.autoSaveInterval = 100; // Sauvegarder toutes les 100 parties
+        this.lastAutoSaveGame = 0;
     }
 
     createInitialState() {
@@ -1113,17 +1264,24 @@ class SelfPlay {
             try {
                 const gameData = await this.playGame();
                 
-                // Mise à jour des métriques
-                this.metrics.updateGameMetrics(gameData);
+                // Gérer la rotation des données
+                const wasAdded = this.manageGameHistory(gameData);
                 
-                // Sauvegarder l'historique de la partie
-                this.gameHistory.push(gameData);
-
-                // Entraîner le réseau sur les dernières parties plus fréquemment
-                if (this.gameHistory.length >= 5) {
-                    await this.trainOnHistory();
-                    this.metrics.logProgress();
+                if (wasAdded) {
+                    // Mise à jour des métriques
+                    this.metrics.updateGameMetrics(gameData);
+                    
+                    // Entraîner le réseau sur les dernières parties
+                    if (this.gameHistory.length >= 5) {
+                        await this.trainOnHistory();
+                        this.metrics.logProgress();
+                    }
                 }
+                
+                // Ajouter des logs pour le suivi de la rotation
+                console.log(`Taille de l'historique: ${this.gameHistory.length}`);
+                console.log(`Qualité moyenne: ${this.calculateAverageQuality()}`);
+                
             } catch (error) {
                 console.error("Erreur pendant la partie:", error);
             }
@@ -1298,7 +1456,19 @@ class SelfPlay {
                 const gameData = await this.playGame();
                 gamesPlayed++;
                 
-                // Update the display
+                // Gérer la rotation de l'historique
+                if (this.gameHistory.length >= this.maxHistorySize) {
+                    this.gameHistory.shift(); // Supprimer la plus ancienne partie
+                }
+                this.gameHistory.push(gameData);
+
+                // Compression périodique de l'historique
+                if (gamesPlayed - this.lastCompressionGame >= this.compressionInterval) {
+                    this.compressHistory();
+                    this.lastCompressionGame = gamesPlayed;
+                }
+
+                // Mise à jour de l'affichage
                 const currentGameDiv = document.getElementById('current-game');
                 if (currentGameDiv) {
                     const winner = gameData.winner ? 
@@ -1307,8 +1477,18 @@ class SelfPlay {
                     currentGameDiv.textContent = `Parties jouées: ${gamesPlayed} | Dernière partie: ${winner}`;
                 }
                 
+                // Vérifier si une sauvegarde automatique est nécessaire
+                if (gamesPlayed - this.lastAutoSaveGame >= this.autoSaveInterval) {
+                    try {
+                        await this.storage.exportToFile(true); // true indique une sauvegarde automatique
+                        this.lastAutoSaveGame = gamesPlayed;
+                        console.log(`Sauvegarde automatique effectuée après ${gamesPlayed} parties`);
+                    } catch (error) {
+                        console.error("Erreur lors de la sauvegarde automatique:", error);
+                    }
+                }
+
                 this.metrics.updateGameMetrics(gameData);
-                this.gameHistory.push(gameData);
 
                 if (this.gameHistory.length >= 5) {
                     await this.trainOnHistory();
@@ -1327,6 +1507,124 @@ class SelfPlay {
     stopTraining() {
         this.continuousTraining = false;
         console.log("Arrêt de l'entraînement continu...");
+    }
+
+    // Nouvelle méthode pour gérer la rotation des données
+    manageGameHistory(gameData) {
+        // Calculer la qualité de la partie
+        const gameQuality = this.evaluateGameQuality(gameData);
+        gameData.quality = gameQuality;
+
+        // Si l'historique est plein, appliquer la stratégie de rotation
+        if (this.gameHistory.length >= this.maxHistorySize) {
+            switch (this.rotationStrategy) {
+                case 'fifo':
+                    // Supprimer la partie la plus ancienne
+                    this.gameHistory.shift();
+                    break;
+                    
+                case 'quality':
+                    // Supprimer la partie de plus basse qualité
+                    const worstGameIndex = this.findWorstGameIndex();
+                    if (worstGameIndex !== -1 && this.gameHistory[worstGameIndex].quality < gameQuality) {
+                        this.gameHistory.splice(worstGameIndex, 1);
+                    } else {
+                        // Si la nouvelle partie est de moins bonne qualité, ne pas l'ajouter
+                        return false;
+                    }
+                    break;
+            }
+        }
+
+        // Ajouter la nouvelle partie si elle répond aux critères de qualité
+        if (gameQuality >= this.gameQualityThreshold) {
+            this.gameHistory.push(gameData);
+            return true;
+        }
+
+        return false;
+    }
+
+    // Méthode pour évaluer la qualité d'une partie
+    evaluateGameQuality(gameData) {
+        let quality = 0;
+        
+        // Critère 1: Longueur de la partie (éviter les parties trop courtes ou trop longues)
+        const optimalLength = 30; // Nombre de coups optimal
+        const lengthQuality = Math.exp(-Math.abs(gameData.history.length - optimalLength) / 20);
+        
+        // Critère 2: Nombre de captures (favoriser les parties avec des captures)
+        const captures = this.countCaptures(gameData.finalState);
+        const captureQuality = Math.min(captures / 6, 1); // Maximum 6 captures pour un score parfait
+        
+        // Critère 3: Diversité des actions
+        const actionDiversity = this.calculateActionDiversity(gameData.history);
+        
+        // Pondération des critères
+        quality = (lengthQuality * 0.3) + (captureQuality * 0.4) + (actionDiversity * 0.3);
+        
+        return quality;
+    }
+
+    // Méthode pour compter les captures dans une partie
+    countCaptures(finalState) {
+        return finalState.inventory[PLAYER_WHITE].capturedDiscs + 
+               finalState.inventory[PLAYER_BLACK].capturedDiscs +
+               finalState.inventory[PLAYER_WHITE].capturedRings + 
+               finalState.inventory[PLAYER_BLACK].capturedRings;
+    }
+
+    // Méthode pour calculer la diversité des actions
+    calculateActionDiversity(history) {
+        const actionTypes = new Set();
+        const actionPositions = new Set();
+        
+        history.forEach(step => {
+            const action = step.action;
+            if (action) {
+                actionTypes.add(action.type);
+                actionPositions.add(`${action.row},${action.col}`);
+            }
+        });
+        
+        // Normaliser la diversité
+        const typesDiversity = actionTypes.size / 4; // 4 types d'actions possibles
+        const positionsDiversity = actionPositions.size / (BOARD_SIZE * BOARD_SIZE);
+        
+        return (typesDiversity + positionsDiversity) / 2;
+    }
+
+    // Méthode pour trouver l'index de la partie de plus basse qualité
+    findWorstGameIndex() {
+        if (this.gameHistory.length === 0) return -1;
+        
+        let worstIndex = 0;
+        let worstQuality = this.gameHistory[0].quality;
+        
+        for (let i = 1; i < this.gameHistory.length; i++) {
+            if (this.gameHistory[i].quality < worstQuality) {
+                worstQuality = this.gameHistory[i].quality;
+                worstIndex = i;
+            }
+        }
+        
+        return worstIndex;
+    }
+
+    // Méthode utilitaire pour calculer la qualité moyenne
+    calculateAverageQuality() {
+        if (this.gameHistory.length === 0) return 0;
+        
+        const totalQuality = this.gameHistory.reduce((sum, game) => sum + game.quality, 0);
+        return totalQuality / this.gameHistory.length;
+    }
+
+    async saveProgress() {
+        return this.storage.exportToFile();
+    }
+
+    async loadProgress(file) {
+        return this.storage.importFromFile(file);
     }
 }
 

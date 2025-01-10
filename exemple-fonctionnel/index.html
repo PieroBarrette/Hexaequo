@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <!-- Set the character encoding for the document -->
+    <meta charset="UTF-8">
+    <!-- Ensure proper rendering and touch zooming for all devices -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <!-- Set the title of the page -->
+    <title>Hexaequo</title>
+    <!-- Link to the external CSS file -->
+    <link rel="stylesheet" href="styles.css">
+    <link rel="manifest" href="manifest.json">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Hexaequo">
+    <link rel="apple-touch-icon" href="icon-192x192.png">
+</head>
+<body>
+    <!-- Main container for the game -->
+    <div id="game-container">
+        <div style="font-size: 200%; font-family: sans-serif; color: white;">HEXAEQUO</div>
+        <div><a href="https://hexaequo.tiiny.site" style="color:white;">View rules</a></div>
+        <div><a href="https://square.link/u/jVpR4mtX?src=sheet" style="color:white;">Buy the game!</a></div>
+
+
+        <!-- Container for the game board -->
+        <div id="board"></div>
+        <div id="controls">
+            <!-- Button to toggle notation on/off -->
+            <button id="toggle-notation">Notation</button>
+            <!-- Button to switch between play and editor mode -->
+            <button id="toggle-mode">Editor mode</button>
+            <!-- Container for action buttons (hidden by default) -->
+            <div id="game-controls" style="display: flow-root;">
+                <div id="action-buttons">
+                    <!-- Button to place a tile on the board -->
+                    <button id="place-tile">Tile</button>
+                    <!-- Button to place a disc on the board -->
+                    <button id="place-disc">Disc</button>
+                    <!-- Button to place a ring on the board -->
+                    <button id="place-ring">Ring</button>
+                    <!-- Button to move a piece on the board -->
+                    <button id="move-piece">Move</button>
+                    <!-- Button to end the current player's turn -->
+                    <button id="end-turn">End turn</button>
+                </div>
+            </div>
+            <!-- Add this inside the #controls div, after the existing buttons -->
+            <div id="editor-controls" style="display: none;">
+                <div class="editor-button" data-type="tile" data-color="white">
+                    <span>White tiles</span>
+                </div>
+                <div class="editor-button" data-type="tile" data-color="black">
+                    <span>Black tiles</span>
+                </div>
+                <div class="editor-button" data-type="disc" data-color="white">
+                    <span>White discs</span>
+                </div>
+                <div class="editor-button" data-type="disc" data-color="black">
+                    <span>Black discs</span>
+                </div>
+                <div class="editor-button" data-type="ring" data-color="white">
+                    <span>White rings</span>
+                </div>
+                <div class="editor-button" data-type="ring" data-color="black">
+                    <span>Black rings</span>
+                </div>
+                <div class="editor-button" id="remove">
+                    <span>Remove</span>
+                </div>
+                <div class="editor-button" id="reset-captures">
+                    <span>Reset captures</span>
+                </div>
+            </div>
+        </div>
+        <div id="player-info">
+            <!-- Display the current player's turn -->
+            <div id="current-player"></div>
+            <!-- Display the white player's inventory -->
+            <div id="white-inventory">
+                White: 
+                Tiles: <span id="white-tiles"></span>
+                Discs: <span id="white-discs"></span>
+                Rings: <span id="white-rings"></span>
+                Captured discs: <span id="white-captured-discs"></span>
+                Captured rings: <span id="white-captured-rings"></span>
+            </div>
+            <!-- Display the black player's inventory -->
+            <div id="black-inventory">
+                Black: 
+                Tiles: <span id="black-tiles"></span>
+                Discs: <span id="black-discs"></span>
+                Rings: <span id="black-rings"></span>
+                Captured discs: <span id="black-captured-discs"></span>
+                Captured rings: <span id="black-captured-rings"></span>
+            </div>
+        </div>
+    </div>
+    <!-- Link to the external JavaScript file -->
+    <script src="game.js"></script>
+</body>
+</html>
