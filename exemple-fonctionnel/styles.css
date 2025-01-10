@@ -237,3 +237,79 @@ button.selected-action {
     cursor: pointer;
 }*/
 
+#toggle-ai {
+    background-color: #4CAF50;
+    color: white;
+    padding: 10px 20px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    margin: 5px;
+}
+
+#toggle-ai:disabled {
+    background-color: #cccccc;
+    cursor: not-allowed;
+}
+
+#toggle-ai.active {
+    background-color: #45a049;
+}
+
+#ai-status {
+    margin-top: 10px;
+    font-weight: bold;
+}
+
+#training-status {
+    margin-top: 10px;
+    padding: 10px;
+    background-color: #333;
+    color: #fff;
+    border-radius: 4px;
+}
+
+#start-training {
+    background-color: #9c27b0;
+    color: white;
+    padding: 10px 20px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    margin: 5px;
+}
+
+#start-training:disabled {
+    background-color: #cccccc;
+}
+
+#ai-controls {
+    display: flex;
+    flex-direction: row;
+    gap: 10px;
+    margin: 10px 0;
+}
+
+#toggle-ai, #start-training {
+    background-color: #4CAF50;
+    color: white;
+    padding: 10px 20px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    margin: 5px;
+}
+
+#start-training {
+    background-color: #9c27b0;
+}
+
+#toggle-ai:disabled, #start-training:disabled {
+    background-color: #cccccc;
+    cursor: not-allowed;
+}
+
+#toggle-ai.active {
+    background-color: #45a049;
+}
+

@@ -1,170 +1,126 @@
+// Namespace pour l'IA du jeu Hexaequo
+const HexaequoAI = {
 // Game constants
-const BOARD_SIZE = 10;
-const PLAYER_WHITE = 'white';
-const PLAYER_BLACK = 'black';
+    BOARD_SIZE: 10,
+    PLAYER_WHITE: 'white',
+    PLAYER_BLACK: 'black',
 
 // Action type constants
-const ACTION_TYPES = {
+    ACTION_TYPES: {
     PLACE_TILE: 'place-tile',
     PLACE_DISC: 'place-disc',
     PLACE_RING: 'place-ring',
     MOVE: 'move'
-};
+    },
 
 // Movement directions
-const MOVE_DIRECTIONS = [
+    MOVE_DIRECTIONS: [
     [-1, 0],  // Nord
     [-1, 1],  // Nord-Est
     [0, 1],   // Est
     [1, 0],   // Sud
     [1, -1],  // Sud-Ouest
     [0, -1]   // Ouest
-];
+    ]
+};
 
-// 1. Définition de l'état du jeu
-class HexaequoState {
+// Définition de la classe HexaequoState dans le namespace
+HexaequoAI.HexaequoState = class {
     constructor(board, inventory, currentPlayer) {
         this.board = JSON.parse(JSON.stringify(board));
         this.inventory = JSON.parse(JSON.stringify(inventory));
         this.currentPlayer = currentPlayer;
     }
 
-    // Définit l'espace d'actions possible (requis par AlphaZero)
-    getActionSpace() {
-        return {
-            // Actions de placement de tuiles: 100 positions possibles (10x10)
-            placeTile: BOARD_SIZE * BOARD_SIZE,
-            // Actions de placement de pièces: 100 positions possibles pour chaque type
-            placeDisc: BOARD_SIZE * BOARD_SIZE,
-            placeRing: BOARD_SIZE * BOARD_SIZE,
-            // Actions de mouvement: source (100) x destination (max 6 directions)
-            move: BOARD_SIZE * BOARD_SIZE * 6
-        };
-    }
-
-    // Convertit l'état en format tensor (requis par AlphaZero)
-    toTensor() {
-        // Crée un tableau 4D avec la forme [1, 10, 10, 4]
-        const tensor = new Array(BOARD_SIZE).fill(0).map(() => 
-            new Array(BOARD_SIZE).fill(0).map(() => 
-                new Array(4).fill(0)
-            )
-        );
-
-        for (let row = 0; row < BOARD_SIZE; row++) {
-            for (let col = 0; col < BOARD_SIZE; col++) {
-                const cell = this.board[row][col];
-                // Canal 0: Tuiles blanches
-                tensor[row][col][0] = cell.tile?.color === PLAYER_WHITE ? 1 : 0;
-                // Canal 1: Tuiles noires
-                tensor[row][col][1] = cell.tile?.color === PLAYER_BLACK ? 1 : 0;
-                // Canal 2: Pièces blanches (1 pour disc, 2 pour ring)
-                tensor[row][col][2] = cell.piece?.color === PLAYER_WHITE ? 
-                    (cell.piece.type === 'disc' ? 1 : 2) : 0;
-                // Canal 3: Pièces noires (1 pour disc, 2 pour ring)
-                tensor[row][col][3] = cell.piece?.color === PLAYER_BLACK ? 
-                    (cell.piece.type === 'disc' ? 1 : 2) : 0;
-            }
-        }
-
-        return tensor;
-    }
-
-    // Vérifie si l'état est terminal (requis par AlphaZero)
+    // Vérifie si l'état est terminal (fin de partie)
     isTerminal() {
         return (
-            this.inventory[PLAYER_WHITE].capturedDiscs === 6 ||
-            this.inventory[PLAYER_BLACK].capturedDiscs === 6 ||
-            this.inventory[PLAYER_WHITE].capturedRings === 3 ||
-            this.inventory[PLAYER_BLACK].capturedRings === 3 ||
-            !this.hasValidMoves(this.currentPlayer)
+            this.inventory[HexaequoAI.PLAYER_WHITE].capturedDiscs === 6 ||
+            this.inventory[HexaequoAI.PLAYER_BLACK].capturedDiscs === 6 ||
+            this.inventory[HexaequoAI.PLAYER_WHITE].capturedRings === 3 ||
+            this.inventory[HexaequoAI.PLAYER_BLACK].capturedRings === 3 ||
+            !this.hasValidMoves() ||
+            !this.hasRemainingPieces(HexaequoAI.PLAYER_WHITE) ||
+            !this.hasRemainingPieces(HexaequoAI.PLAYER_BLACK)
         );
     }
 
-    // Retourne la récompense du point de vue du joueur actuel
+    // Retourne la récompense pour l'état terminal (-1 pour défaite, 1 pour victoire, 0 pour match nul)
     getReward() {
-        if (!this.isTerminal()) return 0;
-        
-        // Victoire par capture de disques
-        if (this.inventory[this.currentPlayer].capturedDiscs === 6) return 1;
-        if (this.inventory[this.getOpponent()].capturedDiscs === 6) return -1;
-        
-        // Victoire par capture d'anneaux
-        if (this.inventory[this.currentPlayer].capturedRings === 3) return 1;
-        if (this.inventory[this.getOpponent()].capturedRings === 3) return -1;
-        
-        // Match nul (plus de mouvements possibles)
-        return 0;
+        if (!this.isTerminal()) {
+            return 0;
+        }
+
+        if (this.inventory[HexaequoAI.PLAYER_WHITE].capturedDiscs === 6 ||
+            this.inventory[HexaequoAI.PLAYER_WHITE].capturedRings === 3 ||
+            !this.hasRemainingPieces(HexaequoAI.PLAYER_BLACK)) {
+            return this.currentPlayer === HexaequoAI.PLAYER_WHITE ? 1 : -1;
+        }
+
+        if (this.inventory[HexaequoAI.PLAYER_BLACK].capturedDiscs === 6 ||
+            this.inventory[HexaequoAI.PLAYER_BLACK].capturedRings === 3 ||
+            !this.hasRemainingPieces(HexaequoAI.PLAYER_WHITE)) {
+            return this.currentPlayer === HexaequoAI.PLAYER_BLACK ? 1 : -1;
+        }
+
+        return 0; // Match nul
     }
 
-    // Obtient le joueur opposé
-    getOpponent() {
-        return this.currentPlayer === PLAYER_WHITE ? PLAYER_BLACK : PLAYER_WHITE;
-    }
-
-    // Obtient toutes les actions légales possibles
+    // Retourne la liste des actions légales possibles
     getLegalActions() {
         const actions = [];
         
-        // 1. Placement de tuiles
+        // Actions de placement de tuiles
         if (this.inventory[this.currentPlayer].tiles > 0) {
-            for (let row = 0; row < BOARD_SIZE; row++) {
-                for (let col = 0; col < BOARD_SIZE; col++) {
+            for (let row = 0; row < HexaequoAI.BOARD_SIZE; row++) {
+                for (let col = 0; col < HexaequoAI.BOARD_SIZE; col++) {
                     if (this.canPlaceTile(row, col)) {
                         actions.push({
-                            type: ACTION_TYPES.PLACE_TILE,
-                            row,
-                            col
+                            type: HexaequoAI.ACTION_TYPES.PLACE_TILE,
+                            row: row,
+                            col: col
                         });
                     }
                 }
             }
         }
 
-        // 2. Placement de disques
-        if (this.inventory[this.currentPlayer].discs > 0) {
-            for (let row = 0; row < BOARD_SIZE; row++) {
-                for (let col = 0; col < BOARD_SIZE; col++) {
-                    if (this.canPlacePiece(row, col)) {
+        // Actions de placement de pièces
+        for (let row = 0; row < HexaequoAI.BOARD_SIZE; row++) {
+            for (let col = 0; col < HexaequoAI.BOARD_SIZE; col++) {
+                if (this.canPlacePiece(row, col)) {
+                    if (this.inventory[this.currentPlayer].discs > 0) {
                         actions.push({
-                            type: ACTION_TYPES.PLACE_DISC,
-                            row,
-                            col
+                            type: HexaequoAI.ACTION_TYPES.PLACE_DISC,
+                            row: row,
+                            col: col
                         });
                     }
-                }
-            }
-        }
-
-        // 3. Placement d'anneaux
-        if (this.inventory[this.currentPlayer].rings > 0 && 
-            this.inventory[this.currentPlayer].capturedDiscs > 0) {
-            for (let row = 0; row < BOARD_SIZE; row++) {
-                for (let col = 0; col < BOARD_SIZE; col++) {
-                    if (this.canPlacePiece(row, col)) {
+                    if (this.inventory[this.currentPlayer].rings > 0 && 
+                        this.inventory[this.currentPlayer].capturedDiscs > 0) {
                         actions.push({
-                            type: ACTION_TYPES.PLACE_RING,
-                            row,
-                            col
+                            type: HexaequoAI.ACTION_TYPES.PLACE_RING,
+                            row: row,
+                            col: col
                         });
                     }
                 }
             }
         }
 
-        // 4. Mouvements de pièces
-        for (let row = 0; row < BOARD_SIZE; row++) {
-            for (let col = 0; col < BOARD_SIZE; col++) {
+        // Actions de mouvement
+        for (let row = 0; row < HexaequoAI.BOARD_SIZE; row++) {
+            for (let col = 0; col < HexaequoAI.BOARD_SIZE; col++) {
                 const piece = this.board[row][col].piece;
                 if (piece && piece.color === this.currentPlayer) {
-                    const moves = this.getPossibleMoves(row, col);
-                    for (const move of moves) {
+                    const moves = this.getLegalMoves(row, col);
+                    moves.forEach(move => {
                         actions.push({
-                            type: ACTION_TYPES.MOVE,
-                            from: { row, col },
+                            type: HexaequoAI.ACTION_TYPES.MOVE,
+                            from: { row: row, col: col },
                             to: { row: move.row, col: move.col }
                         });
-                    }
+                    });
                 }
             }
         }
@@ -172,219 +128,171 @@ class HexaequoState {
         return actions;
     }
 
-    // Applique une action et retourne le nouvel état
-    applyAction(action) {
-        const newState = new HexaequoState(this.board, this.inventory, this.currentPlayer);
-        
-        switch(action.type) {
-            case ACTION_TYPES.PLACE_TILE:
-                newState.placeTile(action.row, action.col);
-                break;
-            case ACTION_TYPES.PLACE_DISC:
-                newState.placePiece(action.row, action.col, 'disc');
-                break;
-            case ACTION_TYPES.PLACE_RING:
-                newState.placePiece(action.row, action.col, 'ring');
-                break;
-            case ACTION_TYPES.MOVE:
-                newState.movePiece(action.from, action.to);
-                break;
-        }
-
-        newState.currentPlayer = this.getOpponent();
-        return newState;
-    }
-
+    // Méthodes auxiliaires pour vérifier les coups légaux
     canPlaceTile(row, col) {
-        // Vérifie si la case est vide
-        if (this.board[row][col].tile || this.board[row][col].piece) {
+        if (this.board[row][col].tile || this.inventory[this.currentPlayer].tiles === 0) {
             return false;
         }
-
-        // Vérifie si le joueur a des tuiles disponibles
-        if (this.inventory[this.currentPlayer].tiles <= 0) {
-            return false;
-        }
-
-        // Vérifie si la case est adjacente à une tuile existante
-        // (sauf pour les premiers coups)
-        const totalTiles = BOARD_SIZE * BOARD_SIZE - 
-            (this.inventory[PLAYER_WHITE].tiles + this.inventory[PLAYER_BLACK].tiles);
         
-        if (totalTiles > 4) { // Après les 4 premières tuiles
-            return this.hasAdjacentTile(row, col);
+        const directions = row % 2 === 0 ?
+            [[-1, 0], [-1, 1], [0, 1], [1, 1], [1, 0], [0, -1]] :
+            [[-1, -1], [-1, 0], [0, 1], [1, 0], [1, -1], [0, -1]];
+        
+        let adjacentTiles = 0;
+        for (const [dx, dy] of directions) {
+            const newRow = row + dx;
+            const newCol = col + dy;
+            if (this.isValidPosition(newRow, newCol) && this.board[newRow][newCol].tile) {
+                adjacentTiles++;
+            }
         }
-
-        return true;
+        
+        return adjacentTiles >= 2;
     }
 
     canPlacePiece(row, col) {
-        // Vérifie si la case a une tuile de la couleur du joueur
-        const cell = this.board[row][col];
-        if (!cell.tile || cell.tile.color !== this.currentPlayer || cell.piece) {
-            return false;
-        }
-        return true;
+        return this.board[row][col].tile &&
+               this.board[row][col].tile.color === this.currentPlayer &&
+               !this.board[row][col].piece;
     }
 
-    hasAdjacentTile(row, col) {
-        for (const [dr, dc] of MOVE_DIRECTIONS) {
-            const newRow = row + dr;
-            const newCol = col + dc;
-            if (this.isValidPosition(newRow, newCol) && 
-                this.board[newRow][newCol].tile) {
-                return true;
+    isValidPosition(row, col) {
+        return row >= 0 && row < HexaequoAI.BOARD_SIZE && 
+               col >= 0 && col < HexaequoAI.BOARD_SIZE;
+    }
+
+    hasValidMoves() {
+        return this.getLegalActions().length > 0;
+    }
+
+    hasRemainingPieces(player) {
+        for (let row = 0; row < HexaequoAI.BOARD_SIZE; row++) {
+            for (let col = 0; col < HexaequoAI.BOARD_SIZE; col++) {
+                const piece = this.board[row][col].piece;
+                if (piece && piece.color === player) {
+                    return true;
+                }
             }
         }
         return false;
     }
 
-    isValidPosition(row, col) {
-        return row >= 0 && row < BOARD_SIZE && col >= 0 && col < BOARD_SIZE;
+    // Applique une action et retourne le nouvel état
+    applyAction(action) {
+        const newState = new HexaequoAI.HexaequoState(
+            this.board,
+            this.inventory,
+            this.currentPlayer
+        );
+
+        switch (action.type) {
+            case HexaequoAI.ACTION_TYPES.PLACE_TILE:
+                newState.board[action.row][action.col].tile = { color: this.currentPlayer };
+                newState.inventory[this.currentPlayer].tiles--;
+                break;
+
+            case HexaequoAI.ACTION_TYPES.PLACE_DISC:
+                newState.board[action.row][action.col].piece = { 
+                    type: 'disc',
+                    color: this.currentPlayer 
+                };
+                newState.inventory[this.currentPlayer].discs--;
+                break;
+
+            case HexaequoAI.ACTION_TYPES.PLACE_RING:
+                newState.board[action.row][action.col].piece = { 
+                    type: 'ring',
+                    color: this.currentPlayer 
+                };
+                newState.inventory[this.currentPlayer].rings--;
+                newState.inventory[this.currentPlayer].capturedDiscs--;
+                break;
+
+            case HexaequoAI.ACTION_TYPES.MOVE:
+                const piece = newState.board[action.from.row][action.from.col].piece;
+                newState.board[action.from.row][action.from.col].piece = null;
+                newState.board[action.to.row][action.to.col].piece = piece;
+                break;
+        }
+
+        newState.currentPlayer = this.currentPlayer === HexaequoAI.PLAYER_WHITE ? 
+            HexaequoAI.PLAYER_BLACK : HexaequoAI.PLAYER_WHITE;
+
+        return newState;
     }
 
-    getPossibleMoves(row, col) {
+    getLegalMoves(row, col) {
         const moves = [];
         const piece = this.board[row][col].piece;
-        
-        if (!piece || piece.color !== this.currentPlayer) {
+
+        if (!piece) {
             return moves;
         }
 
-        // Mouvements normaux (adjacents)
-        for (const [dr, dc] of MOVE_DIRECTIONS) {
-            const newRow = row + dr;
-            const newCol = col + dc;
-            
-            if (this.isValidPosition(newRow, newCol) && 
-                this.board[newRow][newCol].tile &&
-                !this.board[newRow][newCol].piece) {
-                moves.push({row: newRow, col: newCol});
-            }
-        }
+        if (piece.type === 'disc') {
+            // Mouvements adjacents pour les disques
+            const directions = row % 2 === 0 ?
+                [[-1, 0], [-1, 1], [0, 1], [1, 1], [1, 0], [0, -1]] : // Ligne paire
+                [[-1, -1], [-1, 0], [0, 1], [1, 0], [1, -1], [0, -1]]; // Ligne impaire
 
-        // Captures pour les anneaux
-        if (piece.type === 'ring') {
-            for (const [dr, dc] of MOVE_DIRECTIONS) {
-                let r = row + dr;
-                let c = col + dc;
-                
-                while (this.isValidPosition(r, c)) {
-                    if (!this.board[r][c].tile) break;
-                    
-                    const targetPiece = this.board[r][c].piece;
-                    if (targetPiece) {
-                        if (targetPiece.color === this.currentPlayer) break;
-                        
-                        // Cherche une case d'atterrissage après la pièce
-                        const landingRow = r + dr;
-                        const landingCol = c + dc;
-                        if (this.isValidPosition(landingRow, landingCol) && 
-                            this.board[landingRow][landingCol].tile && 
-                            !this.board[landingRow][landingCol].piece) {
-                            moves.push({
-                                row: landingRow, 
-                                col: landingCol, 
-                                capture: {row: r, col: c}
-                            });
-                        }
-                        break;
+            // Mouvements simples
+            for (const [dx, dy] of directions) {
+                const newRow = row + dx;
+                const newCol = col + dy;
+                if (this.isValidPosition(newRow, newCol) && 
+                    !this.board[newRow][newCol].piece && 
+                    this.board[newRow][newCol].tile) {
+                    moves.push({ row: newRow, col: newCol });
+                }
+            }
+
+            // Mouvements de saut
+            const jumpDirections = [[-2, -1], [-2, 1], [0, 2], [2, 1], [2, -1], [0, -2]];
+            for (const [dx, dy] of jumpDirections) {
+                let offset = row % 2 === 0 ? 1 : 0;
+                let middleRow = row + Math.floor(dx / 2);
+                let middleCol = col + Math.floor(dy / 2);
+                if (dx !== 0) {
+                    middleCol = col + Math.floor(dy / 2) + offset;
+                }
+                let jumpRow = row + dx;
+                let jumpCol = col + dy;
+
+                if (this.isValidPosition(middleRow, middleCol) && 
+                    this.isValidPosition(jumpRow, jumpCol) && 
+                    this.board[middleRow][middleCol].piece &&
+                    !this.board[jumpRow][jumpCol].piece &&
+                    this.board[jumpRow][jumpCol].tile) {
+                    moves.push({ row: jumpRow, col: jumpCol });
+                }
+            }
+        } else if (piece.type === 'ring') {
+            // Mouvements de l'anneau (distance de 2)
+            const ringDirections = row % 2 === 0 ?
+                [[-2, -1], [-2, 0], [-2, 1], [-1, 2], [0, 2], [1, 2], 
+                 [2, 1], [2, 0], [2, -1], [1, -1], [0, -2], [-1, -1]] : // Ligne paire
+                [[-2, -1], [-2, 0], [-2, 1], [-1, 1], [0, 2], [1, 1],
+                 [2, 1], [2, 0], [2, -1], [1, -2], [0, -2], [-1, -2]];  // Ligne impaire
+
+            for (const [dx, dy] of ringDirections) {
+                const newRow = row + dx;
+                const newCol = col + dy;
+                if (this.isValidPosition(newRow, newCol) && 
+                    this.board[newRow][newCol].tile) {
+                    const targetPiece = this.board[newRow][newCol].piece;
+                    if (!targetPiece || targetPiece.color !== piece.color) {
+                        moves.push({ row: newRow, col: newCol });
                     }
-                    r += dr;
-                    c += dc;
                 }
             }
         }
 
         return moves;
     }
+};
 
-    placeTile(row, col) {
-        if (this.canPlaceTile(row, col)) {
-            this.board[row][col].tile = { color: this.currentPlayer };
-            this.inventory[this.currentPlayer].tiles--;
-            return true;
-        }
-        return false;
-    }
-
-    placePiece(row, col, type) {
-        if (this.canPlacePiece(row, col)) {
-            if (type === 'disc' && this.inventory[this.currentPlayer].discs > 0) {
-                this.board[row][col].piece = { type: 'disc', color: this.currentPlayer };
-                this.inventory[this.currentPlayer].discs--;
-                return true;
-            }
-            if (type === 'ring' && 
-                this.inventory[this.currentPlayer].rings > 0 &&
-                this.inventory[this.currentPlayer].capturedDiscs > 0) {
-                this.board[row][col].piece = { type: 'ring', color: this.currentPlayer };
-                this.inventory[this.currentPlayer].rings--;
-                this.inventory[this.currentPlayer].capturedDiscs--;
-                return true;
-            }
-        }
-        return false;
-    }
-
-    movePiece(from, to) {
-        const piece = this.board[from.row][from.col].piece;
-        if (!piece || piece.color !== this.currentPlayer) return false;
-
-        const moves = this.getPossibleMoves(from.row, from.col);
-        const targetMove = moves.find(m => m.row === to.row && m.col === to.col);
-        
-        if (targetMove) {
-            // Capture si c'est un mouvement de capture
-            if (targetMove.capture) {
-                const capturedPiece = this.board[targetMove.capture.row][targetMove.capture.col].piece;
-                if (capturedPiece.type === 'disc') {
-                    this.inventory[this.currentPlayer].capturedDiscs++;
-                } else {
-                    this.inventory[this.currentPlayer].capturedRings++;
-                }
-                this.board[targetMove.capture.row][targetMove.capture.col].piece = null;
-            }
-
-            // Déplacer la pièce
-            this.board[to.row][to.col].piece = piece;
-            this.board[from.row][from.col].piece = null;
-            return true;
-        }
-        return false;
-    }
-
-    hasValidMoves(player) {
-        // Vérifie s'il reste des actions possibles
-        const state = new HexaequoState(this.board, this.inventory, player);
-        return state.getLegalActions().length > 0;
-    }
-
-    getWinner() {
-        if (!this.isTerminal()) return null;
-        
-        // Victoire par capture de disques
-        if (this.inventory[PLAYER_WHITE].capturedDiscs === 6) return PLAYER_WHITE;
-        if (this.inventory[PLAYER_BLACK].capturedDiscs === 6) return PLAYER_BLACK;
-        
-        // Victoire par capture d'anneaux
-        if (this.inventory[PLAYER_WHITE].capturedRings === 3) return PLAYER_WHITE;
-        if (this.inventory[PLAYER_BLACK].capturedRings === 3) return PLAYER_BLACK;
-        
-        // Match nul (plus de mouvements possibles)
-        return null;
-    }
-
-    clone() {
-        return new HexaequoState(
-            JSON.parse(JSON.stringify(this.board)),
-            JSON.parse(JSON.stringify(this.inventory)),
-            this.currentPlayer
-        );
-    }
-}
-
-class NeuralNetwork {
+// Définition de la classe NeuralNetwork dans le namespace
+HexaequoAI.NeuralNetwork = class {
     constructor() {
         this.initializeNetwork();
     }
@@ -394,7 +302,7 @@ class NeuralNetwork {
         this.policyNetwork = tf.sequential({
             layers: [
                 tf.layers.conv2d({
-                    inputShape: [BOARD_SIZE, BOARD_SIZE, 3],
+                    inputShape: [HexaequoAI.BOARD_SIZE, HexaequoAI.BOARD_SIZE, 3],
                     filters: 64,
                     kernelSize: 3,
                     padding: 'same',
@@ -418,7 +326,7 @@ class NeuralNetwork {
         this.valueNetwork = tf.sequential({
             layers: [
                 tf.layers.conv2d({
-                    inputShape: [BOARD_SIZE, BOARD_SIZE, 3],
+                    inputShape: [HexaequoAI.BOARD_SIZE, HexaequoAI.BOARD_SIZE, 3],
                     filters: 64,
                     kernelSize: 3,
                     padding: 'same',
@@ -475,18 +383,18 @@ class NeuralNetwork {
     preprocessState(state) {
         // Créer un tenseur 4D [1, BOARD_SIZE, BOARD_SIZE, 3]
         const tensor = tf.tidy(() => {
-            const boardTensor = tf.zeros([BOARD_SIZE, BOARD_SIZE, 3]);
+            const boardTensor = tf.zeros([HexaequoAI.BOARD_SIZE, HexaequoAI.BOARD_SIZE, 3]);
             
             // Parcourir le plateau
-            for (let row = 0; row < BOARD_SIZE; row++) {
-                for (let col = 0; col < BOARD_SIZE; col++) {
+            for (let row = 0; row < HexaequoAI.BOARD_SIZE; row++) {
+                for (let col = 0; col < HexaequoAI.BOARD_SIZE; col++) {
                     const cell = state.board[row][col];
                     
                     // Canal 0: tuiles (1 pour blanc, -1 pour noir)
                     if (cell.tile) {
                         boardTensor.bufferSync().set(
                             row, col, 0,
-                            cell.tile.color === PLAYER_WHITE ? 1 : -1
+                            cell.tile.color === HexaequoAI.PLAYER_WHITE ? 1 : -1
                         );
                     }
                     
@@ -494,7 +402,7 @@ class NeuralNetwork {
                     if (cell.piece && cell.piece.type === 'disc') {
                         boardTensor.bufferSync().set(
                             row, col, 1,
-                            cell.piece.color === PLAYER_WHITE ? 1 : -1
+                            cell.piece.color === HexaequoAI.PLAYER_WHITE ? 1 : -1
                         );
                     }
                     
@@ -502,7 +410,7 @@ class NeuralNetwork {
                     if (cell.piece && cell.piece.type === 'ring') {
                         boardTensor.bufferSync().set(
                             row, col, 2,
-                            cell.piece.color === PLAYER_WHITE ? 1 : -1
+                            cell.piece.color === HexaequoAI.PLAYER_WHITE ? 1 : -1
                         );
                     }
                 }
@@ -547,9 +455,32 @@ class NeuralNetwork {
             valueLoss: valueHistory.history.loss[0]
         };
     }
-}
 
-class MCTSNode {
+    async saveModel() {
+        try {
+            await this.policyNetwork.save('localstorage://hexaequo-policy');
+            await this.valueNetwork.save('localstorage://hexaequo-value');
+            console.log('Model saved successfully');
+        } catch (error) {
+            console.error('Error saving model:', error);
+        }
+    }
+
+    async loadModel() {
+        try {
+            this.policyNetwork = await tf.loadLayersModel('localstorage://hexaequo-policy');
+            this.valueNetwork = await tf.loadLayersModel('localstorage://hexaequo-value');
+            console.log('Model loaded successfully');
+            return true;
+        } catch (error) {
+            console.error('Error loading model:', error);
+            return false;
+        }
+    }
+};
+
+// Définition de la classe MCTSNode dans le namespace
+HexaequoAI.MCTSNode = class {
     constructor(state, parent = null, priorProbability = 1.0) {
         this.state = state;
         this.parent = parent;
@@ -575,22 +506,40 @@ class MCTSNode {
             Math.sqrt(totalVisits) / (1 + this.visits);
         return exploitation + exploration;
     }
-}
+};
 
-class MCTS {
-    constructor(neuralNetwork, numSimulations = 1600) {
+// Définition de la classe MCTS dans le namespace
+HexaequoAI.MCTS = class {
+    constructor(neuralNetwork, options = {}) {
         this.neuralNetwork = neuralNetwork;
-        this.numSimulations = numSimulations;
-        this.explorationConstant = 2.0;  // Increased from 1.0 to encourage exploration
-        this.dirichletNoise = 0.3;  // Added Dirichlet noise for more diverse play
-        this.dirichletAlpha = 0.5;  // Concentration parameter for Dirichlet distribution
+        // Options par défaut
+        this.options = {
+            maxSimulations: 200,    // Réduit de 1600 à 200
+            maxTimeMs: 5000,        // 5 secondes maximum
+            minSimulations: 50,     // Minimum de simulations avant de vérifier le temps
+            ...options
+        };
+        this.explorationConstant = 2.0;
+        this.dirichletNoise = 0.3;
+        this.dirichletAlpha = 0.5;
     }
 
     async search(state) {
-        const root = new MCTSNode(state);
+        const root = new HexaequoAI.MCTSNode(state);
+        const startTime = performance.now();
+        let simCount = 0;
         
-        // Effectuer les simulations
-        for (let i = 0; i < this.numSimulations; i++) {
+        // Continuer tant qu'on n'a pas atteint le nombre max de simulations ou le temps max
+        while (simCount < this.options.maxSimulations) {
+            // Vérifier le temps écoulé après le minimum de simulations
+            if (simCount >= this.options.minSimulations) {
+                const elapsedTime = performance.now() - startTime;
+                if (elapsedTime >= this.options.maxTimeMs) {
+                    console.log(`Arrêt après ${simCount} simulations (${elapsedTime.toFixed(0)}ms)`);
+                    break;
+                }
+            }
+
             let node = root;
             
             // 1. Sélection
@@ -603,12 +552,16 @@ class MCTS {
                 await this.expand(node);
             }
 
-            // 3. Simulation/Évaluation (utilise le réseau neuronal au lieu de playouts aléatoires)
+            // 3. Simulation/Évaluation
             const value = await this.evaluate(node);
 
             // 4. Rétropropagation
             this.backpropagate(node, value);
+            simCount++;
         }
+
+        const totalTime = performance.now() - startTime;
+        console.log(`MCTS terminé : ${simCount} simulations en ${totalTime.toFixed(0)}ms`);
 
         // Retourner l'action avec le plus de visites
         return this.getBestAction(root);
@@ -639,7 +592,7 @@ class MCTS {
         for (const action of legalActions) {
             const nextState = node.state.applyAction(action);
             const priorProb = node.actionProbabilities[this.actionToIndex(action)];
-            node.children.set(action, new MCTSNode(nextState, node, priorProb));
+            node.children.set(action, new HexaequoAI.MCTSNode(nextState, node, priorProb));
         }
     }
 
@@ -675,24 +628,24 @@ class MCTS {
     }
 
     actionToIndex(action) {
-        const base = BOARD_SIZE * BOARD_SIZE;
+        const base = HexaequoAI.BOARD_SIZE * HexaequoAI.BOARD_SIZE;
         
         switch(action.type) {
-            case ACTION_TYPES.PLACE_TILE:
-                return action.row * BOARD_SIZE + action.col;
+            case HexaequoAI.ACTION_TYPES.PLACE_TILE:
+                return action.row * HexaequoAI.BOARD_SIZE + action.col;
             
-            case ACTION_TYPES.PLACE_DISC:
-                return base + (action.row * BOARD_SIZE + action.col);
+            case HexaequoAI.ACTION_TYPES.PLACE_DISC:
+                return base + (action.row * HexaequoAI.BOARD_SIZE + action.col);
             
-            case ACTION_TYPES.PLACE_RING:
-                return 2 * base + (action.row * BOARD_SIZE + action.col);
+            case HexaequoAI.ACTION_TYPES.PLACE_RING:
+                return 2 * base + (action.row * HexaequoAI.BOARD_SIZE + action.col);
             
-            case ACTION_TYPES.MOVE:
-                const dirIndex = MOVE_DIRECTIONS.findIndex(([dr, dc]) => 
+            case HexaequoAI.ACTION_TYPES.MOVE:
+                const dirIndex = HexaequoAI.MOVE_DIRECTIONS.findIndex(([dr, dc]) => 
                     dr === (action.to.row - action.from.row) && 
                     dc === (action.to.col - action.from.col)
                 );
-                return 3 * base + (action.from.row * BOARD_SIZE + action.from.col) * 6 + dirIndex;
+                return 3 * base + (action.from.row * HexaequoAI.BOARD_SIZE + action.from.col) * 6 + dirIndex;
             
             default:
                 throw new Error(`Action type inconnu: ${action.type}`);
@@ -700,14 +653,14 @@ class MCTS {
     }
 
     indexToAction(index) {
-        const base = BOARD_SIZE * BOARD_SIZE;
+        const base = HexaequoAI.BOARD_SIZE * HexaequoAI.BOARD_SIZE;
         
         if (index < base) {
             // Place tile
             return {
-                type: ACTION_TYPES.PLACE_TILE,
-                row: Math.floor(index / BOARD_SIZE),
-                col: index % BOARD_SIZE
+                type: HexaequoAI.ACTION_TYPES.PLACE_TILE,
+                row: Math.floor(index / HexaequoAI.BOARD_SIZE),
+                col: index % HexaequoAI.BOARD_SIZE
             };
         }
         
@@ -715,9 +668,9 @@ class MCTS {
             // Place disc
             index -= base;
             return {
-                type: ACTION_TYPES.PLACE_DISC,
-                row: Math.floor(index / BOARD_SIZE),
-                col: index % BOARD_SIZE
+                type: HexaequoAI.ACTION_TYPES.PLACE_DISC,
+                row: Math.floor(index / HexaequoAI.BOARD_SIZE),
+                col: index % HexaequoAI.BOARD_SIZE
             };
         }
         
@@ -725,9 +678,9 @@ class MCTS {
             // Place ring
             index -= 2 * base;
             return {
-                type: ACTION_TYPES.PLACE_RING,
-                row: Math.floor(index / BOARD_SIZE),
-                col: index % BOARD_SIZE
+                type: HexaequoAI.ACTION_TYPES.PLACE_RING,
+                row: Math.floor(index / HexaequoAI.BOARD_SIZE),
+                col: index % HexaequoAI.BOARD_SIZE
             };
         }
         
@@ -735,12 +688,12 @@ class MCTS {
         index -= 3 * base;
         const fromPos = Math.floor(index / 6);
         const dirIndex = index % 6;
-        const fromRow = Math.floor(fromPos / BOARD_SIZE);
-        const fromCol = fromPos % BOARD_SIZE;
-        const [dr, dc] = MOVE_DIRECTIONS[dirIndex];
+        const fromRow = Math.floor(fromPos / HexaequoAI.BOARD_SIZE);
+        const fromCol = fromPos % HexaequoAI.BOARD_SIZE;
+        const [dr, dc] = HexaequoAI.MOVE_DIRECTIONS[dirIndex];
         
         return {
-            type: ACTION_TYPES.MOVE,
+            type: HexaequoAI.ACTION_TYPES.MOVE,
             from: { row: fromRow, col: fromCol },
             to: { row: fromRow + dr, col: fromCol + dc }
         };
@@ -776,307 +729,26 @@ class MCTS {
         const newInventory = newState.inventory;
         
         // Check if the action led to any captures
-        return (newInventory[PLAYER_WHITE].capturedDiscs > oldInventory[PLAYER_WHITE].capturedDiscs) ||
-               (newInventory[PLAYER_BLACK].capturedDiscs > oldInventory[PLAYER_BLACK].capturedDiscs) ||
-               (newInventory[PLAYER_WHITE].capturedRings > oldInventory[PLAYER_WHITE].capturedRings) ||
-               (newInventory[PLAYER_BLACK].capturedRings > oldInventory[PLAYER_BLACK].capturedRings);
+        return (newInventory[HexaequoAI.PLAYER_WHITE].capturedDiscs > oldInventory[HexaequoAI.PLAYER_WHITE].capturedDiscs) ||
+               (newInventory[HexaequoAI.PLAYER_BLACK].capturedDiscs > oldInventory[HexaequoAI.PLAYER_BLACK].capturedDiscs) ||
+               (newInventory[HexaequoAI.PLAYER_WHITE].capturedRings > oldInventory[HexaequoAI.PLAYER_WHITE].capturedRings) ||
+               (newInventory[HexaequoAI.PLAYER_BLACK].capturedRings > oldInventory[HexaequoAI.PLAYER_BLACK].capturedRings);
     }
-}
-
-// Fonction de test du réseau neuronal
-async function testNeuralNetwork() {
-    console.log("Démarrage du test du réseau neuronal...");
-
-    // Initialize test board
-    const testBoard = Array(BOARD_SIZE).fill(null).map(() => 
-        Array(BOARD_SIZE).fill(null).map(() => 
-            ({element: {}, tile: null, piece: null})
-        )
-    );
-
-    // Initialize test inventory
-    const testInventory = {
-        [PLAYER_WHITE]: { tiles: 9, discs: 6, rings: 3, capturedDiscs: 0, capturedRings: 0 },
-        [PLAYER_BLACK]: { tiles: 9, discs: 6, rings: 3, capturedDiscs: 0, capturedRings: 0 }
-    };
-
-    const testState = new HexaequoState(testBoard, testInventory, PLAYER_WHITE);
-    console.log("État de test créé");
-
-    const nn = new NeuralNetwork();
-    console.log("Réseau neuronal créé");
-
-    try {
-        console.log("Tentative de prédiction...");
-        const prediction = await nn.predict(testState);
-        
-        console.log("Prédiction réussie !");
-        console.log("Politique (5 premières probabilités):", 
-            prediction.policy.slice(0, 5).map(p => p.toFixed(4)));
-        console.log("Valeur de l'état:", prediction.value.toFixed(4));
-        console.log("Taille de la politique:", prediction.policy.length);
-        console.log("Valeur dans [-1, 1]:", 
-            prediction.value >= -1 && prediction.value <= 1);
-
-    } catch (error) {
-        console.error("Erreur pendant le test:", error);
-    }
-}
-
-// Fonction de test pour la conversion action <-> index
-function testActionConversion() {
-    console.log("Test de conversion action <-> index");
-    
-    const testCases = [
-        {
-            action: {
-                type: ACTION_TYPES.PLACE_TILE,
-                row: 5,
-                col: 3
-            },
-            expectedIndex: 53  // 5 * 10 + 3
-        },
-        {
-            action: {
-                type: ACTION_TYPES.PLACE_DISC,
-                row: 2,
-                col: 7
-            },
-            expectedIndex: 127  // 100 + (2 * 10 + 7)
-        },
-        {
-            action: {
-                type: ACTION_TYPES.PLACE_RING,
-                row: 8,
-                col: 1
-            },
-            expectedIndex: 281  // 200 + (8 * 10 + 1)
-        },
-        {
-            action: {
-                type: ACTION_TYPES.MOVE,
-                from: { row: 4, col: 5 },
-                to: { row: 3, col: 5 }  // Mouvement vers le Nord
-            },
-            expectedIndex: 300 + (4 * 10 + 5) * 6 + 0
-        }
-    ];
-
-    let allTestsPassed = true;
-
-    const mcts = new MCTS(null);  // On n'a pas besoin du réseau neuronal pour ces tests
-
-    testCases.forEach((testCase, i) => {
-        try {
-            const index = mcts.actionToIndex(testCase.action);
-            const reconstructedAction = mcts.indexToAction(index);
-            
-            console.log(`Test ${i + 1}:`);
-            console.log('Action originale:', testCase.action);
-            console.log('Index calculé:', index);
-            console.log('Index attendu:', testCase.expectedIndex);
-            console.log('Action reconstruite:', reconstructedAction);
-            
-            const conversionCorrect = index === testCase.expectedIndex;
-            const reconstructionCorrect = JSON.stringify(reconstructedAction) === JSON.stringify(testCase.action);
-            
-            if (conversionCorrect && reconstructionCorrect) {
-                console.log('✅ Test réussi');
-            } else {
-                console.log('❌ Test échoué');
-                allTestsPassed = false;
-            }
-            console.log('---');
-            
-        } catch (error) {
-            console.error(`❌ Erreur dans le test ${i + 1}:`, error);
-            allTestsPassed = false;
-        }
-    });
-
-    console.log(allTestsPassed ? 
-        '✅ Tous les tests ont réussi !' : 
-        '❌ Certains tests ont échoué.'
-    );
-}
-
-// Ajouter après les tests existants
-function testHexaequoState() {
-    console.log("\n=== Tests de HexaequoState ===");
-    
-    // Créer un état de test avec quelques pièces
-    const testBoard = Array(BOARD_SIZE).fill(null).map(() => 
-        Array(BOARD_SIZE).fill(null).map(() => 
-            ({element: {}, tile: null, piece: null})
-        )
-    );
-
-    // Ajouter quelques pièces de test
-    testBoard[4][5].tile = {color: PLAYER_BLACK};  // Noir en premier
-    testBoard[4][5].piece = {type: 'disc', color: PLAYER_BLACK};
-    testBoard[5][5].tile = {color: PLAYER_WHITE};  // Blanc en second
-    testBoard[5][5].piece = {type: 'disc', color: PLAYER_WHITE};
-
-    const testInventory = {
-        [PLAYER_BLACK]: { tiles: 8, discs: 5, rings: 3, capturedDiscs: 0, capturedRings: 0 },
-        [PLAYER_WHITE]: { tiles: 8, discs: 5, rings: 3, capturedDiscs: 1, capturedRings: 0 }
-    };
-
-    // Créer l'état avec le joueur noir qui commence
-    const state = new HexaequoState(testBoard, testInventory, PLAYER_BLACK);
-
-    // Test 1: getLegalActions
-    console.log("Test getLegalActions:");
-    const actions = state.getLegalActions();
-    console.log(`Nombre d'actions légales: ${actions.length}`);
-    console.log("Types d'actions trouvés:", 
-        [...new Set(actions.map(a => a.type))]);
-
-    // Test 2: Placement de tuile
-    console.log("\nTest placement de tuile:");
-    const tilePlacement = actions.find(a => a.type === ACTION_TYPES.PLACE_TILE);
-    if (tilePlacement) {
-        const newState = state.applyAction(tilePlacement);
-        console.log("Position de la tuile:", tilePlacement);
-        console.log("Tuiles restantes:", newState.inventory[PLAYER_WHITE].tiles);
-        console.log("Nouveau joueur:", newState.currentPlayer);
-    }
-
-    // Test 3: Mouvement de pièce
-    console.log("\nTest mouvement de pièce:");
-    const moves = actions.filter(a => a.type === ACTION_TYPES.MOVE);
-    console.log(`Nombre de mouvements possibles: ${moves.length}`);
-    if (moves.length > 0) {
-        console.log("Premier mouvement possible:", moves[0]);
-        const newState = state.applyAction(moves[0]);
-        console.log("Position d'origine vide:", 
-            !newState.board[moves[0].from.row][moves[0].from.col].piece);
-        console.log("Nouvelle position occupée:", 
-            !!newState.board[moves[0].to.row][moves[0].to.col].piece);
-    }
-
-    // Test 4: Placement d'anneau (nécessite des disques capturés)
-    console.log("\nTest placement d'anneau:");
-    const ringPlacements = actions.filter(a => a.type === ACTION_TYPES.PLACE_RING);
-    console.log(`Nombre de placements d'anneaux possibles: ${ringPlacements.length}`);
-    if (ringPlacements.length > 0) {
-        const newState = state.applyAction(ringPlacements[0]);
-        console.log("Anneaux restants:", newState.inventory[PLAYER_WHITE].rings);
-        console.log("Disques capturés restants:", 
-            newState.inventory[PLAYER_WHITE].capturedDiscs);
-    }
-
-    // Test 5: Test de capture
-    console.log("\nTest de capture:");
-    // Créer une situation de capture
-    const captureBoard = JSON.parse(JSON.stringify(testBoard));
-    captureBoard[3][5].piece = {type: 'ring', color: PLAYER_WHITE};
-    captureBoard[3][5].tile = {color: PLAYER_WHITE};
-    
-    const captureState = new HexaequoState(captureBoard, testInventory, PLAYER_WHITE);
-    const captureMoves = captureState.getLegalActions()
-        .filter(a => a.type === ACTION_TYPES.MOVE);
-    
-    console.log(`Mouvements de capture possibles: ${
-        captureMoves.filter(m => 
-            Math.abs(m.to.row - m.from.row) > 1 || 
-            Math.abs(m.to.col - m.from.col) > 1
-        ).length
-    }`);
-}
-
-// Modifier la fonction onload pour inclure les nouveaux tests
-const originalOnload = window.onload;
-window.onload = async function() {
-    // Call the original onload function if it exists
-    if (originalOnload) {
-        originalOnload.call(window);
-    }
-
-    // Run the AI tests after a delay
-    setTimeout(async () => {
-        console.log("=== Tests du réseau neuronal ===");
-        await testNeuralNetwork();
-        
-        console.log("\n=== Tests de conversion d'actions ===");
-        await testActionConversion();
-        
-        console.log("\n=== Tests de l'état du jeu ===");
-        await testHexaequoState();
-        
-        console.log("\n=== Tests d'entraînement ===");
-        await testTraining();
-    }, 1000);
 };
 
-// Intégration avec le jeu
-function initializeAI() {
-    const neuralNetwork = new NeuralNetwork();
-    const mcts = new MCTS(neuralNetwork);
-    return { neuralNetwork, mcts };
-}
-
-async function makeAIMove() {
-    if (!ai) {
-        ai = initializeAI();
-    }
-
-    const currentState = new HexaequoState(board, inventory, currentPlayer);
-    const action = await ai.mcts.search(currentState);
-    
-    // Appliquer l'action au jeu
-    switch(action.type) {
-        case ACTION_TYPES.PLACE_TILE:
-            placeTile(action.row, action.col, currentPlayer);
-            break;
-            
-        case ACTION_TYPES.PLACE_DISC:
-            placePiece(action.row, action.col, 'disc', currentPlayer);
-            break;
-            
-        case ACTION_TYPES.PLACE_RING:
-            placePiece(action.row, action.col, 'ring', currentPlayer);
-            break;
-            
-        case ACTION_TYPES.MOVE:
-            movePiece(action.from, action.to.row, action.to.col);
-            break;
-    }
-
-    endTurn();
-}
-
-// Variable globale pour l'IA
-let ai = null;
-
-// Modifier la fonction switchTurn existante
-function switchTurn() {
-    currentPlayer = currentPlayer === PLAYER_WHITE ? PLAYER_BLACK : PLAYER_WHITE;
-    updateCurrentPlayerDisplay();
-    
-    if (!isGameOver()) {
-        if (currentPlayer === PLAYER_BLACK) {
-            // Ajouter un délai pour une meilleure expérience utilisateur
-            setTimeout(makeAIMove, 500);
-        }
-    }
-} 
-
-class TrainingStorage {
+// Définition de la classe TrainingStorage dans le namespace
+HexaequoAI.TrainingStorage = class {
     constructor(selfPlay) {
         this.selfPlay = selfPlay;
     }
 
     async exportToFile(isAutoSave = false) {
         try {
-            // Ne sauvegarder que les poids du réseau et quelques métriques essentielles
             const data = {
-                // Métriques de base pour le suivi
                 metrics: {
                     totalGames: this.selfPlay.metrics.totalGames,
                     winRates: this.selfPlay.metrics.winRates
                 },
-                // Les poids du réseau (c'est le plus important)
                 networkWeights: await this.compressNetworkWeights()
             };
 
@@ -1126,43 +798,14 @@ class TrainingStorage {
         return true;
     }
 
-    async importFromFile(file) {
-        try {
-            const text = await file.text();
-            const data = JSON.parse(text);
-
-            // Restaurer l'historique des parties
-            this.selfPlay.gameHistory = data.gameHistory || [];
-
-            // Restaurer les métriques
-            if (data.metrics) {
-                Object.assign(this.selfPlay.metrics, data.metrics);
-            }
-
-            // Restaurer les poids du réseau
-            if (data.networkWeights) {
-                await this.importNetworkWeights(data.networkWeights);
-            }
-
-            console.log("Progression chargée avec succès");
-            return true;
-        } catch (error) {
-            console.error("Erreur lors du chargement:", error);
-            throw new Error("Échec du chargement: " + error.message);
-        }
-    }
-
     async compressNetworkWeights() {
-        // Exporter les poids du réseau de politique
         const policyWeights = await Promise.all(
             this.selfPlay.neuralNetwork.policyNetwork.getWeights().map(async w => {
                 const array = await w.array();
-                // Arrondir les valeurs à 4 décimales pour réduire la taille
                 return this.compressArray(array);
             })
         );
 
-        // Exporter les poids du réseau de valeur
         const valueWeights = await Promise.all(
             this.selfPlay.neuralNetwork.valueNetwork.getWeights().map(async w => {
                 const array = await w.array();
@@ -1180,591 +823,220 @@ class TrainingStorage {
         if (Array.isArray(array)) {
             return array.map(item => this.compressArray(item));
         }
-        // Arrondir les nombres à 4 décimales
         return Number(Number(array).toFixed(4));
     }
+};
 
-    // Lors du chargement, reconstruire les données complètes
-    async importData(data) {
-        // Décompresser l'historique avant de le restaurer
-        this.selfPlay.gameHistory = this.selfPlay.decompressHistory(data.gameHistory || []);
-
-        // Restaurer les métriques de base
-        if (data.metrics) {
-            this.selfPlay.metrics.totalGames = data.metrics.totalGames || 0;
-            this.selfPlay.metrics.winRates = data.metrics.winRates || { white: 0, black: 0, draw: 0 };
-            this.selfPlay.metrics.captureRates = data.metrics.captureRates || { discs: 0, rings: 0 };
-        }
-
-        // Restaurer les poids du réseau
-        if (data.networkWeights) {
-            await this.importNetworkWeights(data.networkWeights);
-        }
-    }
-}
-
-class SelfPlay {
-    constructor(numGames = 1000) {
-        this.numGames = numGames;
-        this.neuralNetwork = new NeuralNetwork();
-        this.mcts = new MCTS(this.neuralNetwork, 1600);
-        this.gameHistory = [];
-        this.metrics = new TrainingMetrics();
-        this.temperature = 1.0;  // Temperature parameter for action selection
-        this.temperatureThreshold = 30;  // Number of moves before reducing temperature
-        this.continuousTraining = false;  // Add this line
-        
-        // Paramètres pour la rotation des données
-        this.maxHistorySize = 100; // Garder seulement les 100 dernières parties
-        this.rotationStrategy = 'fifo'; // 'fifo' ou 'quality'
-        this.gameQualityThreshold = 0.6; // Seuil de qualité pour conserver une partie
-        this.storage = new TrainingStorage(this);
-        
-        // Paramètres de sauvegarde automatique
-        this.autoSaveInterval = 100; // Sauvegarder toutes les 100 parties
-        this.lastAutoSaveGame = 0;
-    }
-
-    createInitialState() {
-        // Create an empty board
-        const board = Array(BOARD_SIZE).fill(null).map(() => 
-            Array(BOARD_SIZE).fill(null).map(() => 
-                ({element: {}, tile: null, piece: null})
-            )
-        );
-
-        // Set up initial inventory
-        const inventory = {
-            [PLAYER_WHITE]: { tiles: 9, discs: 6, rings: 3, capturedDiscs: 0, capturedRings: 0 },
-            [PLAYER_BLACK]: { tiles: 9, discs: 6, rings: 3, capturedDiscs: 0, capturedRings: 0 }
+// Définition de la classe SelfPlay dans le namespace
+HexaequoAI.SelfPlay = class {
+    constructor(options = {}) {
+        this.options = {
+            gamesPerIteration: 100,    // Nombre de parties par itération
+            iterations: 10,            // Nombre d'itérations d'entraînement
+            savingFrequency: 10,       // Fréquence de sauvegarde du modèle
+            ...options
         };
-
-        // Place initial pieces on the board
-        board[5][4].tile = { color: PLAYER_WHITE };
-        board[5][5].tile = { color: PLAYER_WHITE };
-        board[5][4].piece = { type: 'disc', color: PLAYER_WHITE };
-        board[4][4].tile = { color: PLAYER_BLACK };
-        board[4][5].tile = { color: PLAYER_BLACK };
-        board[4][5].piece = { type: 'disc', color: PLAYER_BLACK };
-
-        // Adjust inventory for initial setup
-        inventory[PLAYER_WHITE].tiles -= 2;
-        inventory[PLAYER_WHITE].discs -= 1;
-        inventory[PLAYER_BLACK].tiles -= 2;
-        inventory[PLAYER_BLACK].discs -= 1;
-
-        return new HexaequoState(board, inventory, PLAYER_BLACK);
+        
+        this.neuralNetwork = new HexaequoAI.NeuralNetwork();
+        this.gameHistory = new HexaequoAI.GameHistory();
+        this.metrics = {
+            winRates: [],
+            averageGameLength: [],
+            trainingLoss: []
+        };
     }
 
     async train() {
         console.log("Démarrage de l'entraînement...");
         
-        for (let gameId = 0; gameId < this.numGames; gameId++) {
-            console.log(`\nPartie ${gameId + 1}/${this.numGames}`);
-            try {
-                const gameData = await this.playGame();
-                
-                // Gérer la rotation des données
-                const wasAdded = this.manageGameHistory(gameData);
-                
-                if (wasAdded) {
-                    // Mise à jour des métriques
-                    this.metrics.updateGameMetrics(gameData);
-                    
-                    // Entraîner le réseau sur les dernières parties
-                    if (this.gameHistory.length >= 5) {
-                        await this.trainOnHistory();
-                        this.metrics.logProgress();
-                    }
-                }
-                
-                // Ajouter des logs pour le suivi de la rotation
-                console.log(`Taille de l'historique: ${this.gameHistory.length}`);
-                console.log(`Qualité moyenne: ${this.calculateAverageQuality()}`);
-                
-            } catch (error) {
-                console.error("Erreur pendant la partie:", error);
+        for (let iteration = 0; iteration < this.options.iterations; iteration++) {
+            console.log(`\nItération ${iteration + 1}/${this.options.iterations}`);
+            
+            // Jouer plusieurs parties
+            for (let game = 0; game < this.options.gamesPerIteration; game++) {
+                await this.playSingleGame();
             }
+            
+            // Entraîner le réseau sur les parties jouées
+            const losses = await this.trainOnGames();
+            
+            // Sauvegarder le modèle périodiquement
+            if ((iteration + 1) % this.options.savingFrequency === 0) {
+                await this.neuralNetwork.saveModel();
+            }
+            
+            // Afficher les métriques
+            this.logProgress(iteration);
         }
     }
 
-    async playGame() {
-        let state = this.createInitialState();
-        const history = [];
-        let gameLength = 0;
+    async playSingleGame() {
+        const mcts = new HexaequoAI.MCTS(this.neuralNetwork, {
+            maxSimulations: 100,  // Moins de simulations pendant l'entraînement
+            maxTimeMs: 2000,      // Temps plus court pendant l'entraînement
+            minSimulations: 25
+        });
 
-        while (!state.isTerminal() && gameLength < 100) {
-            // Update temperature based on move number
-            if (gameLength > this.temperatureThreshold) {
-                this.temperature = 0.5;  // Reduce temperature for more focused play
-            }
+        let state = new HexaequoAI.HexaequoState(
+            this.createInitialBoard(),
+            this.createInitialInventory(),
+            HexaequoAI.PLAYER_BLACK
+        );
 
-            const currentState = state.clone();
-            const prediction = await this.neuralNetwork.predict(currentState);
-            
-            // Get legal actions
-            const legalActions = currentState.getLegalActions();
-            console.log(`\nTour ${gameLength + 1}:`, {
-                player: currentState.currentPlayer,
-                nbLegalActions: legalActions.length,
-                typesActions: [...new Set(legalActions.map(a => a.type))]
-            });
-            
-            // Get indices for legal actions
-            const legalActionIndices = legalActions.map(action => 
-                this.mcts.actionToIndex(action)
-            );
-            
-            // Normaliser les probabilités pour les actions légales
-            const actionProbs = new Array(prediction.policy.length).fill(0);
-            let sum = 0;
-            for (let i = 0; i < legalActionIndices.length; i++) {
-                const idx = legalActionIndices[i];
-                actionProbs[idx] = prediction.policy[idx];
-                sum += actionProbs[idx];
-            }
-            
-            // Normaliser
-            if (sum > 0) {
-                for (let i = 0; i < actionProbs.length; i++) {
-                    actionProbs[i] /= sum;
-                }
-            } else {
-                // Si toutes les probabilités sont 0, utiliser une distribution uniforme
-                for (const idx of legalActionIndices) {
-                    actionProbs[idx] = 1.0 / legalActions.length;
-                }
-            }
+        const gameHistory = {
+            states: [],
+            actions: [],
+            winner: null
+        };
 
-            history.push({
-                state: currentState,
-                actionProbs: actionProbs,
-                currentPlayer: state.currentPlayer
-            });
-
-            // Sélectionner une action
-            const action = this.sampleAction(actionProbs, legalActions);
-            console.log("Action choisie:", action);
-            
+        while (!state.isTerminal()) {
+            gameHistory.states.push(JSON.stringify(state));
+            const action = await mcts.search(state);
+            gameHistory.actions.push(action);
             state = state.applyAction(action);
-            console.log("Nouvel état:", {
-                inventory: state.inventory,
-                nextPlayer: state.currentPlayer
-            });
-            
-            gameLength++;
         }
 
-        // Reset temperature for next game
-        this.temperature = 1.0;
+        gameHistory.winner = this.determineWinner(state);
+        this.gameHistory.addGame(gameHistory);
+        
+        return gameHistory;
+    }
 
-        const winner = state.getWinner();
-        console.log("\n=== Fin de la partie ===");
-        console.log("Résultat:", {
-            winner: winner || "match nul",
-            nbTours: gameLength,
-            inventaireFinal: state.inventory
-        });
+    async trainOnGames() {
+        const batchSize = 32;
+        let totalPolicyLoss = 0;
+        let totalValueLoss = 0;
+        let numBatches = 0;
+
+        for (const game of this.gameHistory.getRecentGames()) {
+            const states = game.states.map(s => JSON.parse(s));
+            const finalReward = game.winner === HexaequoAI.PLAYER_BLACK ? 1 : -1;
+
+            for (let i = 0; i < states.length; i += batchSize) {
+                const batch = states.slice(i, i + batchSize);
+                const targets = batch.map((_, idx) => {
+                    const moveIdx = i + idx;
+                    return {
+                        policy: this.createPolicyTarget(game.actions[moveIdx]),
+                        value: finalReward * Math.pow(0.95, states.length - moveIdx - 1)
+                    };
+                });
+
+                const { policyLoss, valueLoss } = await this.neuralNetwork.trainStep(
+                    batch,
+                    targets.map(t => t.policy),
+                    targets.map(t => [t.value])
+                );
+
+                totalPolicyLoss += policyLoss;
+                totalValueLoss += valueLoss;
+                numBatches++;
+            }
+        }
 
         return {
-            history,
-            winner,
-            finalState: state
+            policyLoss: totalPolicyLoss / numBatches,
+            valueLoss: totalValueLoss / numBatches
         };
     }
 
-    sampleAction(actionProbs, legalActions) {
-        // Get probabilities only for legal actions
-        const legalProbs = legalActions.map(action => 
-            actionProbs[this.mcts.actionToIndex(action)]
-        );
-        
-        // Apply temperature
-        const temperature = this.temperature;
-        let modifiedProbs = legalProbs.map(p => Math.pow(p, 1/temperature));
-        
-        // Normalize probabilities
-        const sum = modifiedProbs.reduce((a, b) => a + b, 0);
-        if (sum > 0) {
-            modifiedProbs = modifiedProbs.map(p => p/sum);
-        } else {
-            // If all probabilities are zero, use uniform distribution
-            for (const idx of legalActionIndices) {
-                actionProbs[idx] = 1.0 / legalActions.length;
-            }
-        }
-        
-        // Sample from the distribution
-        const rand = Math.random();
-        let cumSum = 0;
-        for (let i = 0; i < modifiedProbs.length; i++) {
-            cumSum += modifiedProbs[i];
-            if (rand < cumSum) {
-                return legalActions[i];
-            }
-        }
-        
-        // Fallback to first legal action
-        return legalActions[0];
+    logProgress(iteration) {
+        console.log(`\nMétriques d'entraînement (Itération ${iteration + 1}):`);
+        console.log(`Taux de victoire moyen: ${this.metrics.winRates[iteration].toFixed(2)}%`);
+        console.log(`Longueur moyenne des parties: ${this.metrics.averageGameLength[iteration].toFixed(1)} coups`);
+        console.log(`Perte moyenne: ${this.metrics.trainingLoss[iteration].toFixed(4)}`);
     }
 
-    async trainOnHistory() {
-        if (this.gameHistory.length === 0) return;
-
-        const batchSize = Math.min(32, this.gameHistory.length * 10);
-        const samples = this.sampleTrainingData(batchSize);
-        
-        const policyLoss = await this.neuralNetwork.trainStep(
-            samples.states,
-            samples.actionProbs,
-            samples.values
+    createInitialBoard() {
+        const board = Array(HexaequoAI.BOARD_SIZE).fill(null).map(() => 
+            Array(HexaequoAI.BOARD_SIZE).fill(null).map(() => 
+                ({element: {}, tile: null, piece: null})
+            )
         );
 
-        return policyLoss;
+        // Position initiale
+        board[5][4].tile = { color: HexaequoAI.PLAYER_WHITE };
+        board[5][5].tile = { color: HexaequoAI.PLAYER_WHITE };
+        board[5][4].piece = { type: 'disc', color: HexaequoAI.PLAYER_WHITE };
+        board[4][4].tile = { color: HexaequoAI.PLAYER_BLACK };
+        board[4][5].tile = { color: HexaequoAI.PLAYER_BLACK };
+        board[4][5].piece = { type: 'disc', color: HexaequoAI.PLAYER_BLACK };
+
+        return board;
     }
 
-    sampleTrainingData(batchSize) {
-        const states = [];
-        const actionProbs = [];
-        const values = [];
-
-        for (let i = 0; i < batchSize; i++) {
-            const gameIndex = Math.floor(Math.random() * this.gameHistory.length);
-            const game = this.gameHistory[gameIndex];
-            const stepIndex = Math.floor(Math.random() * game.history.length);
-            const step = game.history[stepIndex];
-
-            states.push(step.state);
-            actionProbs.push(step.actionProbs);
-            
-            // Calculer la valeur en fonction du gagnant
-            const value = game.winner === step.currentPlayer ? 1 :
-                         game.winner === null ? 0 : -1;
-            values.push(value);
-        }
-
-        return { states, actionProbs, values };
-    }
-
-    async trainContinuously() {
-        this.continuousTraining = true;
-        console.log("Démarrage de l'entraînement continu...");
-        
-        let gamesPlayed = 0;
-        while (this.continuousTraining) {
-            try {
-                const gameData = await this.playGame();
-                gamesPlayed++;
-                
-                // Gérer la rotation de l'historique
-                if (this.gameHistory.length >= this.maxHistorySize) {
-                    this.gameHistory.shift(); // Supprimer la plus ancienne partie
-                }
-                this.gameHistory.push(gameData);
-
-                // Compression périodique de l'historique
-                if (gamesPlayed - this.lastCompressionGame >= this.compressionInterval) {
-                    this.compressHistory();
-                    this.lastCompressionGame = gamesPlayed;
-                }
-
-                // Mise à jour de l'affichage
-                const currentGameDiv = document.getElementById('current-game');
-                if (currentGameDiv) {
-                    const winner = gameData.winner ? 
-                        (gameData.winner === PLAYER_WHITE ? "Blanc" : "Noir") : 
-                        "Match nul";
-                    currentGameDiv.textContent = `Parties jouées: ${gamesPlayed} | Dernière partie: ${winner}`;
-                }
-                
-                // Vérifier si une sauvegarde automatique est nécessaire
-                if (gamesPlayed - this.lastAutoSaveGame >= this.autoSaveInterval) {
-                    try {
-                        await this.storage.exportToFile(true); // true indique une sauvegarde automatique
-                        this.lastAutoSaveGame = gamesPlayed;
-                        console.log(`Sauvegarde automatique effectuée après ${gamesPlayed} parties`);
-                    } catch (error) {
-                        console.error("Erreur lors de la sauvegarde automatique:", error);
-                    }
-                }
-
-                this.metrics.updateGameMetrics(gameData);
-
-                if (this.gameHistory.length >= 5) {
-                    await this.trainOnHistory();
-                    console.log(`Parties jouées: ${gamesPlayed}, Dernière perte: ${this.metrics.lastPolicyLoss}`);
-                }
-
-                if (gamesPlayed % 100 === 0) {
-                    console.log(`Étape: ${gamesPlayed} parties jouées`);
-                }
-            } catch (error) {
-                console.error("Erreur pendant l'entraînement continu:", error);
+    createInitialInventory() {
+        return {
+            [HexaequoAI.PLAYER_WHITE]: { 
+                tiles: 7, discs: 5, rings: 3, 
+                capturedDiscs: 0, capturedRings: 0 
+            },
+            [HexaequoAI.PLAYER_BLACK]: { 
+                tiles: 7, discs: 5, rings: 3, 
+                capturedDiscs: 0, capturedRings: 0 
             }
-        }
+        };
     }
+};
 
-    stopTraining() {
-        this.continuousTraining = false;
-        console.log("Arrêt de l'entraînement continu...");
-    }
-
-    // Nouvelle méthode pour gérer la rotation des données
-    manageGameHistory(gameData) {
-        // Calculer la qualité de la partie
-        const gameQuality = this.evaluateGameQuality(gameData);
-        gameData.quality = gameQuality;
-
-        // Si l'historique est plein, appliquer la stratégie de rotation
-        if (this.gameHistory.length >= this.maxHistorySize) {
-            switch (this.rotationStrategy) {
-                case 'fifo':
-                    // Supprimer la partie la plus ancienne
-                    this.gameHistory.shift();
-                    break;
-                    
-                case 'quality':
-                    // Supprimer la partie de plus basse qualité
-                    const worstGameIndex = this.findWorstGameIndex();
-                    if (worstGameIndex !== -1 && this.gameHistory[worstGameIndex].quality < gameQuality) {
-                        this.gameHistory.splice(worstGameIndex, 1);
-                    } else {
-                        // Si la nouvelle partie est de moins bonne qualité, ne pas l'ajouter
-                        return false;
-                    }
-                    break;
-            }
-        }
-
-        // Ajouter la nouvelle partie si elle répond aux critères de qualité
-        if (gameQuality >= this.gameQualityThreshold) {
-            this.gameHistory.push(gameData);
-            return true;
-        }
-
-        return false;
-    }
-
-    // Méthode pour évaluer la qualité d'une partie
-    evaluateGameQuality(gameData) {
-        let quality = 0;
-        
-        // Critère 1: Longueur de la partie (éviter les parties trop courtes ou trop longues)
-        const optimalLength = 30; // Nombre de coups optimal
-        const lengthQuality = Math.exp(-Math.abs(gameData.history.length - optimalLength) / 20);
-        
-        // Critère 2: Nombre de captures (favoriser les parties avec des captures)
-        const captures = this.countCaptures(gameData.finalState);
-        const captureQuality = Math.min(captures / 6, 1); // Maximum 6 captures pour un score parfait
-        
-        // Critère 3: Diversité des actions
-        const actionDiversity = this.calculateActionDiversity(gameData.history);
-        
-        // Pondération des critères
-        quality = (lengthQuality * 0.3) + (captureQuality * 0.4) + (actionDiversity * 0.3);
-        
-        return quality;
-    }
-
-    // Méthode pour compter les captures dans une partie
-    countCaptures(finalState) {
-        return finalState.inventory[PLAYER_WHITE].capturedDiscs + 
-               finalState.inventory[PLAYER_BLACK].capturedDiscs +
-               finalState.inventory[PLAYER_WHITE].capturedRings + 
-               finalState.inventory[PLAYER_BLACK].capturedRings;
-    }
-
-    // Méthode pour calculer la diversité des actions
-    calculateActionDiversity(history) {
-        const actionTypes = new Set();
-        const actionPositions = new Set();
-        
-        history.forEach(step => {
-            const action = step.action;
-            if (action) {
-                actionTypes.add(action.type);
-                actionPositions.add(`${action.row},${action.col}`);
-            }
-        });
-        
-        // Normaliser la diversité
-        const typesDiversity = actionTypes.size / 4; // 4 types d'actions possibles
-        const positionsDiversity = actionPositions.size / (BOARD_SIZE * BOARD_SIZE);
-        
-        return (typesDiversity + positionsDiversity) / 2;
-    }
-
-    // Méthode pour trouver l'index de la partie de plus basse qualité
-    findWorstGameIndex() {
-        if (this.gameHistory.length === 0) return -1;
-        
-        let worstIndex = 0;
-        let worstQuality = this.gameHistory[0].quality;
-        
-        for (let i = 1; i < this.gameHistory.length; i++) {
-            if (this.gameHistory[i].quality < worstQuality) {
-                worstQuality = this.gameHistory[i].quality;
-                worstIndex = i;
-            }
-        }
-        
-        return worstIndex;
-    }
-
-    // Méthode utilitaire pour calculer la qualité moyenne
-    calculateAverageQuality() {
-        if (this.gameHistory.length === 0) return 0;
-        
-        const totalQuality = this.gameHistory.reduce((sum, game) => sum + game.quality, 0);
-        return totalQuality / this.gameHistory.length;
-    }
-
-    async saveProgress() {
-        return this.storage.exportToFile();
-    }
-
-    async loadProgress(file) {
-        return this.storage.importFromFile(file);
-    }
-}
-
-// Fonction pour démarrer l'entraînement
-async function startTraining() {
-    const selfPlay = new SelfPlay();
-    await selfPlay.train();
-    return selfPlay.neuralNetwork;
-} 
-
-class TrainingMetrics {
+HexaequoAI.GameHistory = class {
     constructor() {
-        this.reset();
-        this.onUpdate = null;
+        this.games = [];
+        this.currentGame = null;
     }
 
-    reset() {
-        this.gameLengths = [];
-        this.winRates = { white: 0, black: 0, draw: 0 };
-        this.captureRates = { discs: 0, rings: 0 };
-        this.averagePolicyEntropy = 0;
-        this.averageValueLoss = 0;
-        this.totalGames = 0;
-    }
-
-    updateGameMetrics(gameData) {
-        this.totalGames++;
-        this.gameLengths.push(gameData.history.length);
-        
-        // Mise à jour des taux de victoire
-        if (gameData.winner === PLAYER_WHITE) this.winRates.white++;
-        else if (gameData.winner === PLAYER_BLACK) this.winRates.black++;
-        else this.winRates.draw++;
-
-        // Calcul des taux de capture moyens
-        const finalState = gameData.finalState;
-        const capturesDiscs = (
-            finalState.inventory[PLAYER_WHITE].capturedDiscs + 
-            finalState.inventory[PLAYER_BLACK].capturedDiscs
-        );
-        const capturesRings = (
-            finalState.inventory[PLAYER_WHITE].capturedRings + 
-            finalState.inventory[PLAYER_BLACK].capturedRings
-        );
-        
-        this.captureRates.discs += capturesDiscs / 12; // 12 disques au total
-        this.captureRates.rings += capturesRings / 6;  // 6 anneaux au total
-
-        console.log("\n=== Statistiques de la partie ===");
-        console.log({
-            numeroPartie: this.totalGames,
-            vainqueur: gameData.winner || "match nul",
-            nbTours: gameData.history.length,
-            captures: {
-                disques: capturesDiscs,
-                anneaux: capturesRings
-            }
-        });
-    }
-
-    updateTrainingMetrics(policyLoss, valueLoss) {
-        // Calcul de l'entropie de la politique (mesure de l'exploration)
-        const policyEntropy = -policyLoss * Math.log(policyLoss);
-        this.averagePolicyEntropy = (
-            this.averagePolicyEntropy * (this.totalGames - 1) + 
-            policyEntropy
-        ) / this.totalGames;
-
-        // Mise à jour de la perte de valeur moyenne
-        this.averageValueLoss = (
-            this.averageValueLoss * (this.totalGames - 1) + 
-            valueLoss
-        ) / this.totalGames;
-    }
-
-    getReport() {
-        const avgGameLength = this.gameLengths.reduce((a, b) => a + b, 0) / this.totalGames;
-        
-        return {
-            totalGames: this.totalGames,
-            averageGameLength: avgGameLength.toFixed(1),
-            winRates: {
-                white: (this.winRates.white / this.totalGames * 100).toFixed(1) + '%',
-                black: (this.winRates.black / this.totalGames * 100).toFixed(1) + '%',
-                draw: (this.winRates.draw / this.totalGames * 100).toFixed(1) + '%'
-            },
-            captureRates: {
-                discs: (this.captureRates.discs / this.totalGames * 100).toFixed(1) + '%',
-                rings: (this.captureRates.rings / this.totalGames * 100).toFixed(1) + '%'
-            },
-            policyEntropy: this.averagePolicyEntropy.toFixed(3),
-            valueLoss: this.averageValueLoss.toFixed(3)
+    startNewGame() {
+        this.currentGame = {
+            states: [],
+            actions: [],
+            winner: null
         };
     }
 
-    logProgress() {
-        const report = this.getReport();
-        console.log('\n=== Métriques d\'entraînement ===');
-        console.log(`Parties jouées: ${report.totalGames}`);
-        console.log(`Longueur moyenne: ${report.averageGameLength} coups`);
-        console.log('Taux de victoire:', report.winRates);
-        console.log('Taux de capture:', report.captureRates);
-        console.log(`Entropie politique: ${report.policyEntropy}`);
-        console.log(`Perte de valeur: ${report.valueLoss}`);
-
-        if (this.onUpdate) this.onUpdate(this);
+    addMove(state, action) {
+        if (this.currentGame) {
+            this.currentGame.states.push(JSON.stringify(state));
+            this.currentGame.actions.push(action);
+        }
     }
-} 
 
-async function testTraining() {
-    console.log("\n=== Test d'entraînement d'AlphaZero ===");
-    
-    try {
-        const selfPlay = new SelfPlay(5); // 5 parties pour le test
-        console.log("Démarrage de l'entraînement test...");
-        await selfPlay.train();
-        
-        // Test de prédiction après entraînement
-        const testState = new HexaequoState(
-            Array(BOARD_SIZE).fill(null).map(() => 
-                Array(BOARD_SIZE).fill(null).map(() => 
-                    ({element: {}, tile: null, piece: null})
-                )
-            ),
-            {
-                [PLAYER_BLACK]: { tiles: 10, discs: 6, rings: 3, capturedDiscs: 0, capturedRings: 0 },
-                [PLAYER_WHITE]: { tiles: 10, discs: 6, rings: 3, capturedDiscs: 0, capturedRings: 0 }
-            },
-            PLAYER_BLACK
-        );
-
-        const prediction = await selfPlay.neuralNetwork.predict(testState);
-        console.log("Test de prédiction après entraînement:");
-        console.log("- Valeur:", prediction.value.toFixed(3));
-        console.log("- Somme des probabilités:", 
-            prediction.policy.reduce((a, b) => a + b, 0).toFixed(3));
-        
-        return "✅ Test d'entraînement réussi";
-    } catch (error) {
-        console.error("❌ Erreur pendant l'entraînement:", error);
-        throw error;
+    endGame(winner) {
+        if (this.currentGame) {
+            this.currentGame.winner = winner;
+            this.games.push(this.currentGame);
+            this.currentGame = null;
+        }
     }
+
+    async trainNetwork(neuralNetwork) {
+        console.log('Starting training on', this.games.length, 'games');
+        
+        for (const game of this.games) {
+            const states = game.states.map(s => JSON.parse(s));
+            const finalReward = game.winner === HexaequoAI.PLAYER_BLACK ? 1 : -1;
+            
+            for (let i = 0; i < states.length; i++) {
+                const state = states[i];
+                const action = game.actions[i];
+                
+                // Calculer la valeur cible (reward discounté)
+                const targetValue = finalReward * Math.pow(0.95, states.length - i - 1);
+                
+                // Créer le vecteur de politique cible
+                const policyTarget = new Array(900).fill(0);
+                const actionIndex = HexaequoAI.MCTS.prototype.actionToIndex(action);
+                policyTarget[actionIndex] = 1;
+                
+                // Entraîner le réseau
+                await neuralNetwork.trainStep([state], [policyTarget], [[targetValue]]);
+            }
+        }
+        
+        console.log('Training completed');
+    }
+};
+
+// Export du namespace si nécessaire
+if (typeof module !== 'undefined' && module.exports) {
+    module.exports = HexaequoAI;
 } 

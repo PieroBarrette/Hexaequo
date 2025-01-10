@@ -9,6 +9,85 @@ let playMode = true; // Whether the game is in play mode or editor mode
 let showNotation = false; // Whether to show algebraic notation on the board
 let jumped = false;
 
+// Add these variables at the top of your file
+let editorMode = false;
+let selectedEditorPiece = null;
+let aiPlayer = null;
+let aiEnabled = false;
+
+class AIController {
+    constructor() {
+        try {
+            this.neuralNetwork = new HexaequoAI.NeuralNetwork();
+            this.mcts = new HexaequoAI.MCTS(this.neuralNetwork);
+            this.isReady = false;
+            this.debugMode = true;
+        } catch (error) {
+            console.error('Error initializing AIController:', error);
+            throw error;
+        }
+    }
+
+    log(...args) {
+        if (this.debugMode) {
+            console.log('[AI]', ...args);
+        }
+    }
+
+    async initialize() {
+        try {
+            console.log('Starting AI initialization...');
+            await this.neuralNetwork.initializeNetwork();
+            this.isReady = true;
+            console.log("AI initialized successfully");
+        } catch (error) {
+            console.error("Failed to initialize AI:", error);
+            throw error;
+        }
+    }
+
+    async getMove(gameState) {
+        if (!this.isReady) {
+            throw new Error("AI not initialized");
+        }
+
+        this.log('Getting move for state:', gameState);
+
+        const alphaZeroState = this.convertToAlphaZeroState(gameState);
+        this.log('Converted to AlphaZero state:', alphaZeroState);
+
+        const startTime = performance.now();
+        const action = await this.mcts.search(alphaZeroState);
+        const endTime = performance.now();
+        
+        this.log('MCTS search completed in', (endTime - startTime).toFixed(2), 'ms');
+        this.log('Selected action:', action);
+
+        const convertedAction = this.convertFromAlphaZeroAction(action);
+        this.log('Converted action:', convertedAction);
+        
+        return convertedAction;
+    }
+
+    convertToAlphaZeroState(gameState) {
+        return new HexaequoAI.HexaequoState(
+            gameState.board,
+            gameState.inventory,
+            gameState.currentPlayer
+        );
+    }
+
+    convertFromAlphaZeroAction(action) {
+        // Convertir l'action d'AlphaZero en action du jeu
+        return {
+            type: action.type,
+            row: action.row,
+            col: action.col,
+            from: action.from,
+            to: action.to
+        };
+    }
+}
 
 // Initialize the game board and player inventories
 const board = [];
@@ -21,10 +100,6 @@ const inventory = {
 let selectedPiece = null; // Currently selected piece
 let possibleMoves = []; // Possible moves for the selected piece
 let currentAction = null; // Current action being performed (e.g., place tile, move piece)
-
-// Add these variables at the top of your file
-let editorMode = false;
-let selectedEditorPiece = null;
 
 // Function to initialize the game board
 function initializeBoard() {
@@ -498,10 +573,165 @@ function movePiece(from, toRow, toCol) {
 }
 
 // Function to switch turns between players
-function switchTurn() {
+async function switchTurn() {
     currentPlayer = currentPlayer === PLAYER_WHITE ? PLAYER_BLACK : PLAYER_WHITE;
+    
+    // Si c'est le tour de l'IA
+    if (aiEnabled && currentPlayer === PLAYER_BLACK) {
+        // Désactiver les contrôles pendant que l'IA réfléchit
+        disableControls();
+        
+        try {
+            const gameState = {
+                board: board,
+                inventory: inventory,
+                currentPlayer: currentPlayer
+            };
+            
+            const aiMove = await aiPlayer.getMove(gameState);
+            await executeAIMove(aiMove);
+        } catch (error) {
+            console.error("AI move error:", error);
+            enableControls();
+        }
+    }
+
     checkGameOver();
     updateAllDisplays();
+}
+
+function disableControls() {
+    document.querySelectorAll('#game-controls button').forEach(button => {
+        button.disabled = true;
+    });
+}
+
+function enableControls() {
+    document.querySelectorAll('#game-controls button').forEach(button => {
+        button.disabled = false;
+    });
+    updateActionButtons();
+}
+
+async function executeAIMove(move) {
+    try {
+        // Simuler le clic sur le type d'action approprié
+        switch (move.type) {
+            case HexaequoAI.ACTION_TYPES.PLACE_TILE:
+                if (!canPlaceTile(move.row, move.col)) {
+                    throw new Error(`Invalid tile placement at ${move.row},${move.col}`);
+                }
+                setCurrentAction('place-tile');
+                await placeTile(move.row, move.col, currentPlayer);
+                break;
+            case HexaequoAI.ACTION_TYPES.PLACE_DISC:
+                if (!canPlacePiece(move.row, move.col)) {
+                    throw new Error(`Invalid disc placement at ${move.row},${move.col}`);
+                }
+                setCurrentAction('place-disc');
+                await placePiece(move.row, move.col, 'disc', currentPlayer);
+                break;
+            case HexaequoAI.ACTION_TYPES.PLACE_RING:
+                if (!canPlacePiece(move.row, move.col)) {
+                    throw new Error(`Invalid ring placement at ${move.row},${move.col}`);
+                }
+                setCurrentAction('place-ring');
+                await placePiece(move.row, move.col, 'ring', currentPlayer);
+                break;
+            case HexaequoAI.ACTION_TYPES.MOVE:
+                const legalMoves = getLegalMoves(move.from.row, move.from.col);
+                const isLegalMove = legalMoves.some(m => 
+                    m.row === move.to.row && m.col === move.to.col
+                );
+                if (!isLegalMove) {
+                    throw new Error(`Invalid move from ${move.from.row},${move.from.col} to ${move.to.row},${move.to.col}`);
+                }
+                setCurrentAction('move-piece');
+                selectedPiece = { row: move.from.row, col: move.from.col };
+                await movePiece(move.from, move.to.row, move.to.col);
+                break;
+            default:
+                throw new Error(`Unknown action type: ${move.type}`);
+        }
+        
+        endTurn();
+    } catch (error) {
+        console.error('Error executing AI move:', error);
+        // Fallback: make a random legal move
+        await makeRandomLegalMove();
+    } finally {
+        enableControls();
+    }
+}
+
+// Fonction de secours pour faire un coup aléatoire légal
+async function makeRandomLegalMove() {
+    const legalMoves = getAllLegalMoves();
+    if (legalMoves.length > 0) {
+        const randomMove = legalMoves[Math.floor(Math.random() * legalMoves.length)];
+        await executeAIMove(randomMove);
+    } else {
+        console.error('No legal moves available');
+        endTurn();
+    }
+}
+
+// Obtenir tous les coups légaux possibles
+function getAllLegalMoves() {
+    const moves = [];
+    
+    // Check tile placements
+    if (inventory[currentPlayer].tiles > 0) {
+        for (let row = 0; row < BOARD_SIZE; row++) {
+            for (let col = 0; col < BOARD_SIZE; col++) {
+                if (canPlaceTile(row, col)) {
+                    moves.push({
+                        type: HexaequoAI.ACTION_TYPES.PLACE_TILE,
+                        row: row,
+                        col: col
+                    });
+                }
+            }
+        }
+    }
+
+    // Check piece placements and movements
+    for (let row = 0; row < BOARD_SIZE; row++) {
+        for (let col = 0; col < BOARD_SIZE; col++) {
+            // Check piece placements
+            if (canPlacePiece(row, col)) {
+                if (inventory[currentPlayer].discs > 0) {
+                    moves.push({
+                        type: HexaequoAI.ACTION_TYPES.PLACE_DISC,
+                        row: row,
+                        col: col
+                    });
+                }
+                if (inventory[currentPlayer].rings > 0 && inventory[currentPlayer].capturedDiscs > 0) {
+                    moves.push({
+                        type: HexaequoAI.ACTION_TYPES.PLACE_RING,
+                        row: row,
+                        col: col
+                    });
+                }
+            }
+
+            // Check movements
+            const piece = board[row][col].piece;
+            if (piece && piece.color === currentPlayer) {
+                const legalMoves = getLegalMoves(row, col);
+                legalMoves.forEach(move => {
+                    moves.push({
+                        type: HexaequoAI.ACTION_TYPES.MOVE,
+                        from: { row: row, col: col },
+                        to: { row: move.row, col: move.col }
+                    });
+                });
+            }
+        }
+    }
+
+    return moves;
 }
 
 // Function to end the current turn
@@ -697,12 +927,12 @@ function initializeGame() {
 
     // Update the display
     updateAllDisplays();
-    closeRules();
 }
 
 function setupEventListeners() {
     document.getElementById('toggle-notation').addEventListener('click', toggleNotation);
     document.getElementById('toggle-mode').addEventListener('click', toggleMode);
+    document.getElementById('toggle-ai').addEventListener('click', toggleAI);
     document.querySelectorAll('.editor-button').forEach(button => {
         button.addEventListener('click', handleEditorButtonClick);
     });
@@ -808,6 +1038,37 @@ function updateAllDisplays() {
     updateInventoryDisplay();
     updateCurrentPlayerDisplay();
     updateActionButtons();
+    updateAIStatus();
+}
+
+function updateAIStatus() {
+    let aiStatusElement = document.getElementById('ai-status');
+    
+    // Si l'élément n'existe pas, le créer
+    if (!aiStatusElement) {
+        const playerInfo = document.getElementById('player-info');
+        if (playerInfo) {
+            aiStatusElement = document.createElement('div');
+            aiStatusElement.id = 'ai-status';
+            playerInfo.appendChild(aiStatusElement);
+        } else {
+            console.error('Player info element not found');
+            return;
+        }
+    }
+
+    try {
+        if (aiEnabled) {
+            const isAITurn = currentPlayer === PLAYER_BLACK;
+            aiStatusElement.textContent = `AI ${isAITurn ? 'thinking...' : 'waiting'}`;
+            aiStatusElement.style.color = isAITurn ? 'orange' : 'green';
+        } else {
+            aiStatusElement.textContent = 'AI disabled';
+            aiStatusElement.style.color = 'gray';
+        }
+    } catch (error) {
+        console.error('Error updating AI status:', error);
+    }
 }
 
 // Make sure to call this function when the page loads
@@ -855,3 +1116,51 @@ window.addEventListener('click', function(event) {
         closeRules();
     }
 });*/
+
+async function toggleAI() {
+    try {
+        const aiButton = document.getElementById('toggle-ai');
+        if (!aiButton) {
+            console.error('AI button not found');
+            return;
+        }
+
+        if (aiEnabled) {
+            // Désactiver l'IA
+            aiEnabled = false;
+            aiButton.textContent = 'Play vs AI';
+            aiButton.classList.remove('active');
+        } else {
+            // Activer l'IA
+            aiButton.disabled = true;
+            aiButton.textContent = 'Initializing AI...';
+            
+            if (!aiPlayer) {
+                console.log('Creating new AI player...');
+                aiPlayer = new AIController();
+                await aiPlayer.initialize();
+                console.log('AI player initialized');
+            }
+            
+            aiEnabled = true;
+            aiButton.textContent = 'Play vs Human';
+            aiButton.classList.add('active');
+        }
+        
+        aiButton.disabled = false;
+        updateAllDisplays();
+        
+        // Si c'est le tour de l'IA après activation, déclencher son tour
+        if (aiEnabled && currentPlayer === PLAYER_BLACK) {
+            await switchTurn();
+        }
+    } catch (error) {
+        console.error('Failed to toggle AI:', error);
+        const aiButton = document.getElementById('toggle-ai');
+        if (aiButton) {
+            aiButton.textContent = 'AI Error';
+            aiButton.disabled = true;
+        }
+        aiEnabled = false;
+    }
+}
