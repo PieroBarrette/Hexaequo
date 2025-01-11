@@ -26,10 +26,28 @@
         <!-- Container for the game board -->
         <div id="board"></div>
         <div id="controls">
-            <!-- Button to toggle notation on/off -->
-            <button id="toggle-notation">Notation</button>
-            <!-- Button to switch between play and editor mode -->
-            <button id="toggle-mode">Editor mode</button>
+            <div id="player-info">
+                <!-- Display the current player's turn -->
+                <div id="current-player"></div>
+                <!-- Display the white player's inventory -->
+                <div id="white-inventory">
+                    White: 
+                    Tiles: <span id="white-tiles"></span>
+                    Discs: <span id="white-discs"></span>
+                    Rings: <span id="white-rings"></span>
+                    Captured discs: <span id="white-captured-discs"></span>
+                    Captured rings: <span id="white-captured-rings"></span>
+                </div>
+                <!-- Display the black player's inventory -->
+                <div id="black-inventory">
+                    Black: 
+                    Tiles: <span id="black-tiles"></span>
+                    Discs: <span id="black-discs"></span>
+                    Rings: <span id="black-rings"></span>
+                    Captured discs: <span id="black-captured-discs"></span>
+                    Captured rings: <span id="black-captured-rings"></span>
+                </div>
+            </div>
             <!-- Container for action buttons (hidden by default) -->
             <div id="game-controls" style="display: flow-root;">
                 <div id="action-buttons">
@@ -72,31 +90,23 @@
                     <span>Reset captures</span>
                 </div>
             </div>
-        </div>
-        <div id="player-info">
-            <!-- Display the current player's turn -->
-            <div id="current-player"></div>
-            <!-- Display the white player's inventory -->
-            <div id="white-inventory">
-                White: 
-                Tiles: <span id="white-tiles"></span>
-                Discs: <span id="white-discs"></span>
-                Rings: <span id="white-rings"></span>
-                Captured discs: <span id="white-captured-discs"></span>
-                Captured rings: <span id="white-captured-rings"></span>
+            
+            <!-- Container for AI controls -->
+            <div id="ai-controls">
+                <button id="toggle-ai">Play vs AI</button>
+                <button id="start-training">Train AI</button>
+                <button id="load-network">Load Network</button>
+                <button id="save-network">Save Network</button>
             </div>
-            <!-- Display the black player's inventory -->
-            <div id="black-inventory">
-                Black: 
-                Tiles: <span id="black-tiles"></span>
-                Discs: <span id="black-discs"></span>
-                Rings: <span id="black-rings"></span>
-                Captured discs: <span id="black-captured-discs"></span>
-                Captured rings: <span id="black-captured-rings"></span>
-            </div>
+            <!-- Button to toggle notation on/off -->
+            <button id="toggle-notation">Notation</button>
+            <!-- Button to switch between play and editor mode -->
+            <button id="toggle-mode">Editor mode</button>
         </div>
     </div>
-    <!-- Link to the external JavaScript file -->
+    <!-- Link to the external JavaScript files -->
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest"></script>
+    <script src="../alphazero.js"></script>
     <script src="game.js"></script>
 </body>
 </html>
