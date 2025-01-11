@@ -3,6 +3,13 @@ const BOARD_SIZE = 10;
 const PLAYER_WHITE = 'white';
 const PLAYER_BLACK = 'black';
 
+// Configuration de l'entraînement
+const trainingConfig = {
+    gamesPerIteration: 2,
+    iterations: 1,
+    maxTimePerMove: 1000
+};
+
 // Initialize game state variables
 let currentPlayer = PLAYER_BLACK; // Current player's turn
 let playMode = true; // Whether the game is in play mode or editor mode
@@ -18,6 +25,10 @@ let gameHistory = null;
 let lastMove = null;  // Pour stocker le dernier coup joué
 let moveHistory = [];  // Pour stocker l'historique des mouvements
 const MAX_REPETITIONS = 3;  // Nombre maximum de répétitions autorisées
+let rewards = {
+    [PLAYER_WHITE]: 0,
+    [PLAYER_BLACK]: 0
+};
 
 class AIController {
     constructor() {
@@ -166,6 +177,12 @@ function setupInitialState() {
     inventory[PLAYER_WHITE].discs -= 1;
     inventory[PLAYER_BLACK].tiles -= 2;
     inventory[PLAYER_BLACK].discs -= 1;
+
+    // Réinitialiser les rewards
+    rewards = {
+        [PLAYER_WHITE]: 0,
+        [PLAYER_BLACK]: 0
+    };
 
     updateAllDisplays();
 }
@@ -446,6 +463,7 @@ function highlightMovablePieces() {
 // Function to get legal moves for a piece
 function getLegalMoves(row, col) {
     const moves = [];
+    const captureMoves = []; // Nouveau tableau pour les mouvements de capture
     const piece = board[row][col].piece;
 
     if (!piece) {
@@ -453,8 +471,8 @@ function getLegalMoves(row, col) {
     }
 
     if (piece.type === 'disc') {
-        // Adjacent moves for discs
-        if(!jumped){
+        // Mouvements simples adjacents
+        if(!jumped) {
             const directions = row % 2 === 0 ?
             [[-1, 0], [-1, 1], [0, 1], [1, 1], [1, 0], [0, -1]] : // Even row
             [[-1, -1], [-1, 0], [0, 1], [1, 0], [1, -1], [0, -1]]; // Odd row
@@ -466,10 +484,9 @@ function getLegalMoves(row, col) {
                 }
             }
         }
-        // Jump moves for discs
-        const jumpDirections = 
-        [[-2, -1], [-2, 1], [0, 2], [2, 1], [2, -1], [0, -2]];
 
+        // Mouvements de saut (qui peuvent capturer)
+        const jumpDirections = [[-2, -1], [-2, 1], [0, 2], [2, 1], [2, -1], [0, -2]];
         for (const [dx, dy] of jumpDirections) {
             let offset = 0;
             if (row % 2 === 0) {
@@ -486,16 +503,22 @@ function getLegalMoves(row, col) {
             // Check if the positions are valid before accessing them
             if (isValidPosition(middleRow, middleCol) && isValidPosition(jumpRow, jumpCol) && 
                 board[middleRow][middleCol].piece &&
+                board[middleRow][middleCol].piece.color !== piece.color && // Vérifier si c'est une pièce adverse
                 !board[jumpRow][jumpCol].piece &&
                 board[jumpRow][jumpCol].tile) {
-                moves.push({ row: jumpRow, col: jumpCol });
+                captureMoves.push({ 
+                    row: jumpRow, 
+                    col: jumpCol,
+                    capture: true,
+                    capturePos: { row: middleRow, col: middleCol }
+                });
             }
         }
     } else if (piece.type === 'ring') {
-        // Ring moves (distance of 2)
+        // Mouvements de l'anneau (qui peuvent capturer)
         const ringDirections = row % 2 === 0 ?
-            [[-2, -1], [-2, 0], [-2, 1], [-1, 2], [0, 2], [1, 2], [2, 1], [2, 0], [2, -1], [1, -1], [0, -2], [-1, -1]] : // Even row
-            [[-2, -1], [-2, 0], [-2, 1], [-1, 1], [0, 2], [1, 1], [2, 1], [2, 0], [2, -1], [1, -2], [0, -2], [-1, -2]]; // Odd row
+            [[-2, -1], [-2, 0], [-2, 1], [-1, 2], [0, 2], [1, 2], [2, 1], [2, 0], [2, -1], [1, -1], [0, -2], [-1, -1]] :
+            [[-2, -1], [-2, 0], [-2, 1], [-1, 1], [0, 2], [1, 1], [2, 1], [2, 0], [2, -1], [1, -2], [0, -2], [-1, -2]];
         for (const [dx, dy] of ringDirections) {
             const newRow = row + dx;
             const newCol = col + dy;
@@ -504,12 +527,18 @@ function getLegalMoves(row, col) {
                 if (targetPiece && targetPiece.color === piece.color) {
                     
                 }else{
-                    moves.push({ row: newRow, col: newCol });
+                    captureMoves.push({ 
+                        row: newRow, 
+                        col: newCol,
+                        capture: true 
+                    });
                 }
             }
         }
     }
-    return moves;
+
+    // Retourner les mouvements de capture en priorité s'ils existent
+    return captureMoves.length > 0 ? captureMoves : moves;
 }
 
 // Function to check if a position is valid on the board
@@ -921,22 +950,44 @@ function displayGameOver(winner) {
     const gameOverElement = document.createElement('div');
     gameOverElement.id = 'game-over';
 
+    // Formater les rewards avec 2 décimales
+    const whiteRewards = rewards[PLAYER_WHITE].toFixed(2);
+    const blackRewards = rewards[PLAYER_BLACK].toFixed(2);
+
     if (winner === 'training-completed') {
         gameOverElement.innerHTML = `
             <h2>Training Completed</h2>
             <p>AI has completed the training session</p>
+            <div class="rewards-summary">
+                <p>Final Rewards:</p>
+                <p>White: ${whiteRewards}</p>
+                <p>Black: ${blackRewards}</p>
+            </div>
             <button id="reset-game">Start New Game</button>
         `;
     } else {
         gameOverElement.innerHTML = `
             <h2>Game Over</h2>
             <p>${winner === 'Ex Aequo' ? 'It\'s Ex Aequo!' : `${winner.charAt(0).toUpperCase() + winner.slice(1)} wins!`}</p>
+            <div class="rewards-summary">
+                <p>Final Rewards:</p>
+                <p>White: ${whiteRewards}</p>
+                <p>Black: ${blackRewards}</p>
+            </div>
             <button id="reset-game">Start New Game</button>
         `;
     }
 
     document.body.appendChild(gameOverElement);
     document.getElementById('reset-game').addEventListener('click', resetGame);
+    
+    // Log des statistiques dans la console
+    console.log('=== Game Statistics ===');
+    console.log(`Winner: ${winner}`);
+    console.log('Rewards:');
+    console.log(`- White: ${whiteRewards} (Captures: ${inventory[PLAYER_WHITE].capturedDiscs} discs, ${inventory[PLAYER_WHITE].capturedRings} rings)`);
+    console.log(`- Black: ${blackRewards} (Captures: ${inventory[PLAYER_BLACK].capturedDiscs} discs, ${inventory[PLAYER_BLACK].capturedRings} rings)`);
+    console.log('==================');
 }
 
 // Function to reset the game
@@ -1081,10 +1132,17 @@ function capturePiece(row, col) {
     const piece = board[row][col].piece;
     if (piece) {
         const capturedBy = piece.color === PLAYER_WHITE ? PLAYER_BLACK : PLAYER_WHITE;
+        const loser = piece.color;
+        
         if (piece.type === 'disc') {
             inventory[capturedBy].capturedDiscs++;
+            rewards[capturedBy] += 0.1;  // Bonus pour le capteur
+            rewards[loser] -= 0.1;       // Malus pour le perdant
         } else if (piece.type === 'ring') {
             inventory[capturedBy].capturedRings++;
+            // Ajouter les rewards
+            rewards[capturedBy] += 0.2;  // Bonus pour le capteur
+            rewards[loser] -= 0.2;       // Malus pour le perdant
         }
         board[row][col].piece = null;
     }
@@ -1303,13 +1361,6 @@ async function startTraining() {
             await aiPlayer.initialize();
         }
 
-        // Configuration de l'entraînement
-        const trainingConfig = {
-            gamesPerIteration: 5,
-            iterations: 1,
-            maxTimePerMove: 1000
-        };
-
         console.log("Configuration de l'entraînement:", trainingConfig);
 
         // Créer ou mettre à jour l'élément de statut
@@ -1327,7 +1378,7 @@ async function startTraining() {
             
             for (let g = 0; g < trainingConfig.gamesPerIteration; g++) {
                 console.log(`\nPartie ${g + 1}/${trainingConfig.gamesPerIteration}`);
-                statusElement.textContent += ` - Game ${g + 1}`;
+                statusElement.textContent = `Iteration ${i + 1}/${trainingConfig.iterations} - Game ${g + 1}/${trainingConfig.gamesPerIteration}`;
                 
                 const winner = await playSelfPlayGame(trainingConfig.maxTimePerMove);
                 console.log(`Partie terminée. Gagnant: ${winner}`);

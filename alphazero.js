@@ -26,10 +26,17 @@ const HexaequoAI = {
 
 // Définition de la classe HexaequoState dans le namespace
 HexaequoAI.HexaequoState = class {
-    constructor(board, inventory, currentPlayer) {
+    constructor(board, inventory, currentPlayer, rewardWeights = null) {
         this.board = JSON.parse(JSON.stringify(board));
         this.inventory = JSON.parse(JSON.stringify(inventory));
         this.currentPlayer = currentPlayer;
+        // Utiliser les poids par défaut si non fournis
+        this.rewardWeights = rewardWeights || {
+            capturedDisc: 0.1,
+            capturedRing: 0.2,
+            lostDisc: 0.1,
+            lostRing: 0.2
+        };
     }
 
     // Vérifie si l'état est terminal (fin de partie)
@@ -46,7 +53,7 @@ HexaequoAI.HexaequoState = class {
     }
 
     // Retourne la récompense pour l'état terminal (-1 pour défaite, 1 pour victoire, 0 pour match nul)
-    getReward() {
+    /*getReward() {
         if (!this.isTerminal()) {
             return 0;
         }
@@ -64,7 +71,41 @@ HexaequoAI.HexaequoState = class {
         }
 
         return 0; // Match nul
-    }
+    }*/
+
+        getReward() {
+            // Récompense finale si l'état est terminal
+            if (this.isTerminal()) {
+                if (this.inventory[HexaequoAI.PLAYER_WHITE].capturedDiscs === 6 ||
+                    this.inventory[HexaequoAI.PLAYER_WHITE].capturedRings === 3 ||
+                    !this.hasRemainingPieces(HexaequoAI.PLAYER_BLACK)) {
+                    return this.currentPlayer === HexaequoAI.PLAYER_WHITE ? 1 : -1;
+                }
+        
+                if (this.inventory[HexaequoAI.PLAYER_BLACK].capturedDiscs === 6 ||
+                    this.inventory[HexaequoAI.PLAYER_BLACK].capturedRings === 3 ||
+                    !this.hasRemainingPieces(HexaequoAI.PLAYER_WHITE)) {
+                    return this.currentPlayer === HexaequoAI.PLAYER_BLACK ? 1 : -1;
+                }
+        
+                return 0; // Match nul
+            }
+        
+            let intermediateReward = 0;
+            const weights = this.rewardWeights; // Utiliser les poids locaux
+            const opponent = this.currentPlayer === HexaequoAI.PLAYER_WHITE ? 
+                HexaequoAI.PLAYER_BLACK : HexaequoAI.PLAYER_WHITE;
+        
+            // Récompenses pour les captures
+            intermediateReward += this.inventory[this.currentPlayer].capturedDiscs * weights.capturedDisc;
+            intermediateReward += this.inventory[this.currentPlayer].capturedRings * weights.capturedRing;
+        
+            // Pénalités pour les pertes
+            intermediateReward -= this.inventory[opponent].capturedDiscs * weights.lostDisc;
+            intermediateReward -= this.inventory[opponent].capturedRings * weights.lostRing;
+        
+            return intermediateReward;
+        }
 
     // Retourne la liste des actions légales possibles
     getLegalActions() {
@@ -182,7 +223,8 @@ HexaequoAI.HexaequoState = class {
         const newState = new HexaequoAI.HexaequoState(
             this.board,
             this.inventory,
-            this.currentPlayer
+            this.currentPlayer,
+            this.rewardWeights // Passer les poids au nouvel état
         );
 
         switch (action.type) {
@@ -308,6 +350,12 @@ HexaequoAI.NeuralNetwork = class {
             lastUpdate: null
         };
         this.isTraining = false; // Verrou d'entraînement
+        this.rewardWeights = {
+            capturedDisc: 0.1,
+            capturedRing: 0.2,
+            lostDisc: 0.1,
+            lostRing: 0.2
+        };
     }
 
     getVersionString() {
@@ -587,7 +635,8 @@ HexaequoAI.NeuralNetwork = class {
                         lastUpdate: this.stats.lastUpdate,
                         selfPlayGames: this.stats.selfPlayGames,
                         humanGames: this.stats.humanGames
-                    }
+                    },
+                    rewardWeights: this.rewardWeights,
                 }
             };
 
@@ -626,6 +675,12 @@ HexaequoAI.NeuralNetwork = class {
     async loadNetwork(file) {
         try {
             const saveData = JSON.parse(await file.text());
+            
+            // Charger les poids des récompenses s'ils existent
+            if (saveData.metadata?.rewardWeights) {
+                this.rewardWeights = saveData.metadata.rewardWeights;
+                console.log('Reward weights loaded:', this.rewardWeights);
+            }
             
             // Charger les statistiques si elles existent
             if (saveData.metadata?.training) {
@@ -809,11 +864,9 @@ HexaequoAI.MCTS = class {
     }
 
     async expand(node) {
-        // Obtenir les probabilités d'action du réseau neuronal
         const prediction = await this.neuralNetwork.predict(node.state);
         node.actionProbabilities = prediction.policy;
 
-        // Créer les nœuds enfants pour chaque action légale
         const legalActions = node.state.getLegalActions();
         for (const action of legalActions) {
             const nextState = node.state.applyAction(action);
@@ -823,11 +876,15 @@ HexaequoAI.MCTS = class {
     }
 
     async evaluate(node) {
+        const reward = node.state.getReward(); // Obtenir la récompense (finale ou intermédiaire)
+        
         if (node.state.isTerminal()) {
-            return node.state.getReward();
+            return reward;
         }
+        
         const prediction = await this.neuralNetwork.predict(node.state);
-        return prediction.value;
+        // Combiner la récompense immédiate avec la prédiction future
+        return reward + 0.95 * prediction.value;
     }
 
     backpropagate(node, value) {
@@ -1057,9 +1114,9 @@ HexaequoAI.TrainingStorage = class {
 HexaequoAI.SelfPlay = class {
     constructor(options = {}) {
         this.options = {
-            gamesPerIteration: 100,    // Nombre de parties par itération
-            iterations: 10,            // Nombre d'itérations d'entraînement
-            savingFrequency: 10,       // Fréquence de sauvegarde du modèle
+            gamesPerIteration: 2,    // Nombre de parties par itération
+            iterations: 1,            // Nombre d'itérations d'entraînement
+            savingFrequency: 1,       // Fréquence de sauvegarde du modèle
             ...options
         };
         
@@ -1140,11 +1197,18 @@ HexaequoAI.SelfPlay = class {
 
             for (let i = 0; i < states.length; i += batchSize) {
                 const batch = states.slice(i, i + batchSize);
-                const targets = batch.map((_, idx) => {
+                const targets = batch.map((state, idx) => {
                     const moveIdx = i + idx;
+                    const immediateReward = new HexaequoAI.HexaequoState(
+                        state.board, 
+                        state.inventory, 
+                        state.currentPlayer,
+                        this.neuralNetwork.rewardWeights
+                    ).getReward();
+                    
                     return {
                         policy: this.createPolicyTarget(game.actions[moveIdx]),
-                        value: finalReward * Math.pow(0.95, states.length - moveIdx - 1)
+                        value: immediateReward + finalReward * Math.pow(0.95, states.length - moveIdx - 1)
                     };
                 });
 
